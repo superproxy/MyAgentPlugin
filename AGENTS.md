@@ -19,6 +19,111 @@
 
 > 说明：当前以本仓库已有结构为主进行治理整理。若后续需要严格适配 Trae 的 Rules / MCP / Skills 官方格式，请再按官方文档补齐语法细节；不要在未验证前提下臆造官方字段。
 
+> 想直接看怎么用脚本？请看 [README.md]。本文件聚焦**为什么这么设计**与**协作边界**。
+
+---
+
+## 1.5 设计思路
+
+### 1.5.1 单一数据源（Single Source of Truth）
+
+`agents/` 是仓库的**唯一数据源**：
+
+```
+agents/
+  ├── rules/              # 团队共识的规则（产品 / 设计 / 前端 / 后端 / 安全 / 测试 / API）
+  ├── mcp/                # MCP 配置模板与运行态
+  └── skills/*/SKILL.md   # 技能定义
+```
+
+各 IDE 不重复维护一份配置，而是通过下面三种映射方式指向 `agents/`：
+
+| 映射方式 | 用途 | 示例 |
+|----------|------|------|
+| **Junction / Symlink** | 目录级链接，源文件改动自动可见 | `.trae/rules/` ⟶ `agents/rules/` |
+| **生成产物**（脚本输出） | 不同 IDE 格式不同，需要按规则转换 | `agents/mcp/mcp.json` ⟶ `.codex/config.toml`（TOML） |
+| **复制（fallback）** | Junction 不可用时退化为复制 | `.workbuddy/skills/` |
+
+> ✅ 所以**绝不要**在 `.trae/rules/` 等链接目标里直接编辑文件——改动会被链接源覆盖；要改请回到 `agents/rules/`。
+
+### 1.5.2 三层配置分离
+
+```
+模板（提交，无密钥）   →  本地密钥（不提交）   →  运行态产物（不提交，由脚本生成）
+*.template.json/toml      env.json                mcp.json / auth.json / config.toml / opencode.json
+```
+
+- **模板层**：列出占位符 `${KEY}`，可以安全提交，作为"团队共识结构"。
+- **密钥层**：`env.json` 由开发者本地填写，**绝不提交**。
+- **运行态产物**：由 [scripts/init-env.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-env.py) 在本地组合两者后生成；**绝不提交**。
+
+这样模板可以演化（新增 provider / MCP 服务）而不需要每次改密钥；密钥可以轮换而不影响共享结构。
+
+### 1.5.3 LLM Provider 双轨
+
+不同 IDE 的 LLM 加载语义不同，本仓库用 `env.json` 同一份数据，按需扁平化为不同形态的环境变量：
+
+| IDE | 语义 | 占位符前缀 | 切换方式 |
+|-----|------|-----------|---------|
+| **Codex / Claude** | 一次只用一个 active provider | `${LLM_ACTIVE_*}` / `${OPENAI_API_KEY}` | 改 `env.json._active_provider` |
+| **OpenCode** | 多 provider 并存，UI 内选择 | `${LLM_<PROVIDER>_<PROTOCOL>_*}` | 在 `env.json.llm` 中维护 |
+
+**设计意图**：
+
+- 用户填一份 `env.json` 同时满足多个 IDE，不需要为每个 IDE 各自维护一份密钥
+- 切换 active provider 只需一条命令，Codex 的 base_url / api_key 自动跟随
+- OpenCode 列出哪些 provider 由模板文件决定，与具体密钥解耦
+
+### 1.5.4 自动剪枝（Conditional Generation）
+
+模板里可以**预先列出所有可能的 provider / MCP 服务**，没填的不会污染最终配置：
+
+> 在 `provider.*` / `providers.*` / `mcpServers.*` / `mcp.*` 这几个**容器键**下，如果某个子项含未解析的 `${...}` 占位符，整段会被自动移除。
+
+**为什么只对这些容器键剪枝？**
+
+- 它们的子项天然是"可插拔"的——一个 provider 缺失不影响其他
+- 顶层字段（如 `model_provider`）即使有占位符也通常意味着配置错误，需要显性报警
+
+这套机制让模板可以扮演"目录"的角色，未启用项自动隐形。
+
+### 1.5.5 占位符命名约定
+
+| 模式 | 含义 | 用途 |
+|------|------|------|
+| `${LLM_ACTIVE_<FIELD>}` | 当前 active provider 的扁平字段 | 通用引用 |
+| `${LLM_ACTIVE_<PROTOCOL>_<FIELD>}` | active provider 的指定协议字段 | 区分 OpenAI / Anthropic 协议 |
+| `${LLM_<PROVIDER>_<PROTOCOL>_<FIELD>}` | env.json 中**任意 provider** 的字段 | 多 provider 并存 |
+| `${OPENAI_API_KEY}` / `${ANTHROPIC_*}` | 兼容性标准化键 | 历史代码、第三方 SDK |
+
+新增占位符时优先沿用现有命名约定，不引入第四种风格。
+
+### 1.5.6 IDE 抽象层级
+
+`scripts/init-ide.py` 把所有 IDE 抽象成相同的初始化步骤：
+
+```
+[Rules]    源 agents/rules/ → 目标 IDE rules 目录（Junction 优先，复制 fallback）
+[MCP]      源 agents/mcp/mcp.json → 目标 IDE 期望的 MCP 配置（按 IDE 格式转换）
+[Skills]   源 agents/skills/ → 目标 IDE skills 目录（复制） + 索引 README.md
+[Manifest] 复制 AGENTS.md 等项目级指令
+```
+
+新增一个 IDE 通常只需：
+
+1. 在 `init-ide.py` 加一个 `init_<name>()` 函数
+2. 在 `--ide` 参数列表加上选项
+3. 如果 IDE 有特殊 MCP 格式，加一个 `convert_to_<name>_mcp()`
+
+**核心约束**：不要为单个 IDE 创建平行的 `agents/` 副本；所有差异都应在生成层处理，而非数据层。
+
+### 1.5.7 一键脚本的语义
+
+| 脚本 | 含义 | 适用场景 |
+|------|------|---------|
+| `init-env` | 只刷新密钥相关产物 | 轮换密钥、切换 provider |
+| `install` | 端到端：密钥 + 多 IDE 全量 | 新机器、新成员、大版本升级 |
+
 ---
 
 ## 2. 指令优先级与使用方式

@@ -2,60 +2,47 @@
 
 将 `agents/` 共享配置一键映射到 Cursor / Trae / Codex / OpenCode / Claude / IDEA 等多种 IDE。
 
+> 本文件聚焦**怎么用**。如果想了解仓库的设计思路与治理边界，请看 [AGENTS.md](AGENTS.md)。
+
 ---
 
-## 脚本列表
+## 1. 快速开始
+
+```bash
+# 1) 复制密钥模板
+cp env.example.json env.json
+
+# 2) 编辑 env.json，填入真实 API Key（也可留空，由 OS 环境变量回退）
+
+# 3) 一键全量初始化（生成配置 + 链接所有支持的 IDE）
+.\install.cmd      # Windows
+./install.sh        # macOS / Linux
+```
+
+完成后即可在已支持的 IDE 中使用统一的 rules / mcp / skills 配置。
+
+---
+
+## 2. 脚本与一键命令总览
 
 | 脚本 | 用途 |
 |------|------|
-| `scripts/init-env.py` | 从 `env.json` / 系统环境变量生成 MCP / Codex / OpenCode 配置 |
-| `scripts/init-ide.py` | 通用初始化（支持多 IDE 选择） |
-| `init-env.cmd` / `init-env.sh` | 一键执行环境初始化 |
+| [scripts/init-env.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-env.py) | 从 `env.json` / OS 环境变量生成 MCP / Codex / OpenCode 配置 |
+| [scripts/init-ide.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-ide.py) | 通用 IDE 初始化（创建 Junction、复制 / 生成配置） |
+| `init-env.cmd` / `init-env.sh` | 一键生成密钥相关配置 |
 | `install.cmd` / `install.sh` | 一键执行环境初始化 + 多 IDE 初始化 |
 
-## 环境要求
+### 环境要求
 
 - Python 3.10+
 - Windows / macOS / Linux 均可
 - Windows 下创建 Junction 需以**管理员权限**运行终端
 
-## 核心设计
-
-`agents/rules/` 是**唯一数据源**，各 IDE 的 `rules/` 目录通过 Windows Junction（或软链）指向它，修改一处自动同步。
-
-```
-agents/rules/                <-- 唯一数据源（在这里编辑）
-  ├── .trae/rules/           <-- Junction（自动同步）
-  ├── .cursor/rules/         <-- Junction（自动同步）
-  ├── .codex/rules/          <-- Junction（自动同步）
-  ├── .claude/rules/         <-- Junction（自动同步）
-  └── ...                    <-- 其他 IDE 同理
-```
-
-密钥与配置分离：
-
-```
-env.json (本地，含真实密钥, 不提交)
-  ├──> agents/mcp/mcp.template.json     ──生成──> agents/mcp/mcp.json
-  ├──> ide/codex/auth.template.json     ──生成──> ide/codex/auth.json
-  └──> ide/opencode/opencode.template.json ──生成──> ide/opencode/opencode.json
-```
-
 ---
 
-## init-env.py（环境/密钥初始化）
+## 3. init-env.py 使用手册
 
-### 工作流程
-
-1. 读取 `env.json` 中配置的密钥
-2. **若某项为空，自动回退使用 OS 环境变量**
-3. 设置进程或用户级环境变量
-4. 用密钥替换以下模板中的 `${KEY}` 占位符：
-   - `agents/mcp/mcp.template.json` → `agents/mcp/mcp.json`
-   - `ide/codex/auth.template.json` → `ide/codex/auth.json`
-   - `ide/opencode/opencode.template.json` → `ide/opencode/opencode.json`
-
-### 基本用法
+### 3.1 常用命令
 
 ```bash
 # 默认：设置进程环境变量 + 生成所有配置文件
@@ -74,7 +61,24 @@ python scripts/init-env.py -a Env --scope user --force
 python scripts/init-env.py -a ExportShell
 ```
 
-### 参数
+### 3.2 切换当前 LLM Provider
+
+仅影响 Codex / Claude（一次只用一个 LLM 的 IDE）。OpenCode 不受影响。
+
+```bash
+# 切换到火山引擎（沿用当前协议）
+python scripts/init-env.py --provider volcengine
+
+# 同时指定协议
+python scripts/init-env.py --provider volcengine --protocol anthropic
+
+# 切换并立即重新生成配置
+python scripts/init-env.py --provider deepseek -a Generate
+```
+
+支持的 provider 来自 `env.json` 中 `llm.*` 节点（默认包含 `openicu` / `openai` / `openrouter` / `deepseek` / `volcengine`）。
+
+### 3.3 参数速查
 
 | 参数 | 简写 | 说明 | 默认值 |
 |------|------|------|--------|
@@ -83,27 +87,34 @@ python scripts/init-env.py -a ExportShell
 | `--template-file` | — | MCP 模板路径 | `agents/mcp/mcp.template.json` |
 | `--output-file` | — | MCP 生成路径 | `agents/mcp/mcp.json` |
 | `--scope` | — | `process` / `user` | `process` |
+| `--provider` | — | 切换 active provider | — |
+| `--protocol` | — | 切换 active protocol（`openai` / `anthropic`） | — |
 | `--force` | — | 跳过确认提示 | 否 |
 
-### 首次配置
+### 3.4 自动生成的文件
 
-```bash
-# 1. 复制密钥模板
-cp env.example.json env.json
+| 模板 | 生成 | 用途 |
+|------|------|------|
+| `agents/mcp/mcp.template.json` | `agents/mcp/mcp.json` | MCP 服务密钥（共享） |
+| `ide/codex/auth.template.json` | `ide/codex/auth.json` | Codex 当前 LLM 的 API Key |
+| `ide/codex/config.template.toml` | `ide/codex/config.toml` | Codex 当前 LLM 的 base_url |
+| `ide/opencode/opencode.template.json` | `ide/opencode/opencode.json` | OpenCode 多 provider 列表 |
 
-# 2. 编辑 env.json 填入真实密钥
-#    没填的字段会自动从 OS 环境变量读取
+> ⚙️ **自动剪枝**：模板中如果某个 `provider.*` 或 `mcpServers.*` 子项含有未解析的 `${...}`，整段会被自动移除。这样可以在模板里预先列出所有可能的 provider，未配置的会自动消失，不会产生死配置。
 
-# 3. 运行初始化
-python scripts/init-env.py -a All
-```
+### 3.5 LLM Provider 占位符速查
 
-### 密钥清单
+| 占位符 | 来源 | 用法 |
+|--------|------|------|
+| `${LLM_ACTIVE_BASE_URL}` / `${LLM_ACTIVE_API_KEY}` | 当前 active provider 的扁平字段 | Codex / Claude 类 IDE |
+| `${LLM_ACTIVE_OPENAI_*}` / `${LLM_ACTIVE_ANTHROPIC_*}` | active provider 的指定协议字段 | 需要明确协议时 |
+| `${LLM_<PROVIDER>_<PROTOCOL>_<FIELD>}` | env.json 中**任意 provider** 的字段 | OpenCode（多 provider 并存） |
+| `${OPENAI_API_KEY}` / `${ANTHROPIC_*}` | 兼容性标准化键（来自 active provider） | 历史模板 |
+
+### 3.6 密钥清单（MCP / 业务）
 
 | 变量名 | 用途 |
 |--------|------|
-| `OPENAI_API_KEY` | OpenAI / Codex / OpenCode |
-| `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` | Anthropic / Claude |
 | `AMAP_MAPS_API_KEY` | 高德地图 MCP |
 | `WECOM_WEBHOOK_URL` | 企业微信 |
 | `BOSS_COOKIE` / `BOSS_BST` | BOSS 直聘 |
@@ -114,25 +125,14 @@ python scripts/init-env.py -a All
 | `MASTERGO_MAGIC_TOKEN` | MasterGo Magic |
 | `CONTEXT7_API_KEY` | Context7 文档 |
 
-### 版本控制边界
-
-| 文件 | 提交？ | 说明 |
-|------|--------|------|
-| `env.example.json` | ✅ | 仅占位，可安全提交 |
-| `env.json` | ❌ | 含真实密钥（已在 `.gitignore`） |
-| `*.template.json` | ✅ | 仅 `${KEY}` 占位符 |
-| `agents/mcp/mcp.json` | ❌ | 由脚本生成（已忽略） |
-| `ide/codex/auth.json` | ❌ | 由脚本生成（已忽略） |
-| `ide/opencode/opencode.json` | ❌ | 由脚本生成（已忽略） |
-
 ---
 
-## init-ide.py（通用 IDE 初始化）
+## 4. init-ide.py 使用手册
 
-### 基本用法
+### 4.1 常用命令
 
 ```bash
-# 默认：初始化所有支持的 IDE，写到当前用户主目录
+# 初始化所有支持的 IDE，写到当前用户主目录
 python scripts/init-ide.py
 
 # 强制覆盖已有配置
@@ -152,7 +152,7 @@ python scripts/init-ide.py -i OpenCode
 python scripts/init-ide.py -i IDEA
 python scripts/init-ide.py -i Agents
 
-# 指定目标目录
+# 指定目标目录（IDE 配置写入位置）
 python scripts/init-ide.py -i trae-cn -t $env:USERPROFILE -f
 python scripts/init-ide.py -t D:\my-project
 
@@ -160,66 +160,56 @@ python scripts/init-ide.py -t D:\my-project
 python scripts/init-ide.py --source-dir D:\my-project
 ```
 
-### 参数
+### 4.2 参数速查
 
 | 参数 | 简写 | 说明 | 默认值 |
 |------|------|------|--------|
-| `--target-dir` | `-t` | 目标项目根目录（IDE 配置写入位置） | 用户主目录 |
-| `--source-dir` | `-s` | 源目录（`agents/` 所在目录） | 脚本所在目录的父目录 |
+| `--target-dir` | `-t` | IDE 配置写入位置 | 用户主目录 |
+| `--source-dir` | `-s` | `agents/` 所在目录 | 脚本所在目录的父目录 |
 | `--ide` | `-i` | 见下方 IDE 选项 | `All` |
 | `--force` | `-f` | 强制覆盖已有配置 | 否 |
 
-### 支持的 IDE
+### 4.3 支持的 IDE
 
 `Cursor` · `Trae` · `trae-cn` · `trae-solo-cn` · `Codex` · `Claude` · `WorkBuddy` · `Qoder` · `OpenClaw` · `OpenCode` · `IDEA` · `Agents` · `All`
 
-### 链接方式概览
+### 4.4 链接 / 生成方式
 
 | 目标 | 链接类型 | 源 |
 |------|----------|-----|
 | `.agent/rules/` | Junction（目录） | `agents/rules/` |
-| `.trae/rules/` | Junction（目录） | `agents/rules/` |
-| `.trae-cn/rules/` | Junction（目录） | `agents/rules/` |
-| `.cursor/rules/` | Junction（目录） | `agents/rules/` |
-| `.codex/rules/` | Junction（目录） | `agents/rules/` |
-| `.claude/rules/` | Junction（目录） | `agents/rules/` |
-| `.workbuddy/rules/` 等 | Junction（目录） | `agents/rules/` |
-| `.mcp.json` / `*/mcp.json` | Symlink/Copy（文件） | `agents/mcp/mcp.json` |
+| `.trae/rules/` 等各 IDE rules 目录 | Junction（目录） | `agents/rules/` |
+| `.mcp.json` | Symlink/Copy（文件） | `agents/mcp/mcp.json` |
 | `.cursor/mcp.json` | 生成文件 | `agents/mcp/mcp.json`（mcpServers 键） |
-| `.codex/config.toml` | 生成文件 | `agents/mcp/mcp.json`（TOML 格式） |
+| `.codex/config.toml` | 生成文件 | TOML 格式 |
+| `.codex/auth.json` | 复制文件 | `ide/codex/auth.json` |
 | `.opencode/opencode.json` | 生成文件 | `ide/opencode/opencode.template.json` |
 | `*/skills/` | 复制目录 | `agents/skills/` |
 | `*/skills/README.md` | 生成文件 | 技能索引 |
 
 ---
 
-## 一键脚本
+## 5. 一键脚本
 
-### 仅生成密钥相关配置
+### 5.1 仅生成配置文件
 
 ```bash
-# Windows
-.\init-env.cmd
-
-# macOS / Linux
-./init-env.sh
+.\init-env.cmd        # Windows
+./init-env.sh          # macOS / Linux
 ```
 
 等价于 `python scripts/init-env.py -a Generate`。
 
-### 全量初始化（环境 + 多 IDE）
+### 5.2 全量初始化
 
 ```bash
-# Windows
-.\install.cmd
-
-# macOS / Linux
-./install.sh
+.\install.cmd         # Windows
+./install.sh           # macOS / Linux
 ```
 
 依次执行：
 
-1. `init-env`（生成 mcp.json / auth.json / opencode.json）
+1. `init-env`（生成 mcp.json / auth.json / config.toml / opencode.json）
 2. `init-ide -i Agents`
 3. `init-ide -i trae-cn`
 4. `init-ide -i Cursor`
@@ -230,55 +220,69 @@ python scripts/init-ide.py --source-dir D:\my-project
 
 ---
 
-## 生成的目录结构
+## 6. 典型场景
 
+### 场景 A：新成员第一次使用
+
+```bash
+git clone <repo>
+cd agent-init-plugin
+cp env.example.json env.json
+# 编辑 env.json 填密钥
+.\install.cmd
 ```
-项目根目录/
-├── agents/                            # 唯一数据源
-│   ├── rules/                         # Rules（编辑这里）
-│   │   ├── git-commit-message.md
-│   │   ├── api/collaboration-standards.md
-│   │   ├── backend/{coding,database,ddd}-standards.md
-│   │   ├── design/standards.md
-│   │   ├── frontend/coding-standards.md
-│   │   ├── product/prd-standards.md
-│   │   ├── security/standards.md
-│   │   └── testing/standards.md
-│   ├── mcp/
-│   │   ├── mcp.template.json          # MCP 模板（提交）
-│   │   ├── mcp-env.template.json      # 密钥模板（提交）
-│   │   └── mcp.json                   # 由 init-env 生成（不提交）
-│   └── skills/*/SKILL.md              # 技能定义
-│
-├── ide/
-│   ├── codex/
-│   │   ├── auth.template.json         # 提交
-│   │   ├── auth.json                  # 由 init-env 生成（不提交）
-│   │   └── config.toml
-│   ├── opencode/
-│   │   ├── opencode.template.json     # 提交
-│   │   └── opencode.json              # 由 init-env 生成（不提交）
-│   └── idea/
-│       └── acp.json
-│
-├── .trae/rules/                       --Junction--> agents/rules/
-├── .cursor/rules/                     --Junction--> agents/rules/
-├── .codex/rules/                      --Junction--> agents/rules/
-├── .mcp.json                          --Symlink---> agents/mcp/mcp.json
-├── .cursor/mcp.json                   （生成，mcpServers 键）
-├── .codex/config.toml                 （生成，TOML）
-├── .opencode/opencode.json            （生成，OpenCode）
-├── env.json                           （本地密钥，不提交）
-├── env.example.json                   （密钥模板，可提交）
-├── AGENTS.md                          （Trae 项目指令）
-└── scripts/
-    ├── init-env.py
-    └── init-ide.py
+
+### 场景 B：切换到火山引擎跑 Codex
+
+```bash
+python scripts/init-env.py --provider volcengine -a Generate
+# 重启 Codex，base_url / api_key 已自动更新
 ```
+
+### 场景 C：只想刷新某个 IDE
+
+```bash
+python scripts/init-ide.py -i Cursor -f
+```
+
+### 场景 D：临时调试，把密钥仅写入当前会话
+
+```bash
+python scripts/init-env.py -a Env --scope process
+```
+
+### 场景 E：把密钥持久化到用户级环境变量
+
+```bash
+python scripts/init-env.py -a Env --scope user --force
+```
+
+### 场景 F：在 OpenCode 里新增一个 LLM provider
+
+1. 在 `env.json` 的 `llm` 下加一节：
+   ```json
+   "groq": { "openai": { "base_url": "https://api.groq.com/openai/v1", "api_key": "..." } }
+   ```
+2. 在 `ide/opencode/opencode.template.json` 的 `provider` 下新增条目，引用 `${LLM_GROQ_OPENAI_*}` 占位符
+3. 重新生成：`python scripts/init-env.py -a Generate`
 
 ---
 
-## 不同 IDE 的格式差异
+## 7. 版本控制边界
+
+| 文件 | 提交？ | 说明 |
+|------|--------|------|
+| `env.example.json` | ✅ | 仅占位 |
+| `env.json` | ❌ | 含真实密钥（已在 `.gitignore`） |
+| `*.template.json` / `*.template.toml` | ✅ | 仅 `${KEY}` 占位符 |
+| `agents/mcp/mcp.json` | ❌ | 由脚本生成 |
+| `ide/codex/auth.json` | ❌ | 由脚本生成 |
+| `ide/codex/config.toml` | ❌ | 由脚本生成 |
+| `ide/opencode/opencode.json` | ❌ | 由脚本生成 |
+
+---
+
+## 8. 不同 IDE 的格式差异
 
 | 项目 | Cursor | Trae | Codex | OpenCode |
 |------|--------|------|-------|----------|
@@ -290,94 +294,57 @@ python scripts/init-ide.py --source-dir D:\my-project
 
 ---
 
-## 推荐 Skill 列表（按角色）
+## 9. Skill 推荐速查
 
-> 角色映射由 [`doc/skills-mapping.csv`](file:///c:/Users/59300/Desktop/agent-init-plugin/doc/skills-mapping.csv) 驱动，脚本运行时自动读取。新增/调整 Skill 只需修改 CSV 即可，无需改代码。
+> 详细映射由 [`doc/skills-mapping.csv`](file:///c:/Users/59300/Desktop/agent-init-plugin/doc/skills-mapping.csv) 驱动，新增 / 调整 Skill 只需改 CSV。设计原则见 [AGENTS.md](file:///c:/Users/59300/Desktop/agent-init-plugin/AGENTS.md#7-skills-推荐矩阵)。
 
-### CSV 字段说明
-
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| `skill_name` | Skill 名称（与 `agents/skills/` 目录名一致） | `drawio-skill` |
-| `category` | 功能分类 | `可视化` |
-| `role` | 适用角色（`\|` 分隔） | `Frontend\|Backend\|Design` |
-| `description` | 功能简述 | `生成 .drawio 流程图/架构图...` |
-| `trigger_keywords` | 触发关键词（`\|` 分隔） | `画图\|流程图\|架构图` |
-| `installable` | 是否为通用安装型技能 | `true` / `false` |
-
-- **内置技能**（`installable: false`）：按角色直接推荐，开箱即用
-- **通用安装型技能**（`installable: true`）：通过 `find-skills` 安装后使用
-
-### 前端（Frontend）
-
-| Skill | 说明 |
-|-------|------|
-| `stitch-prototype-skill` | 用 Stitch MCP 从文本生成 UI 原型 |
-| `mastergo-magic-skill` | 用 MasterGo Magic 生成中保真原型与前端代码 |
-| `drawio-skill` | 生成 .drawio 流程图、架构图 |
-| `mermaid-sequence-from-flow` | 业务流程转 Mermaid 序列图 |
-
-### 后端（Backend）
-
-| Skill | 说明 |
-|-------|------|
-| `restful-api-design-skill` | RESTful API 设计、规范自检、OpenAPI 生成 |
-| `task-plan-skill` | PRD 拆解任务计划（里程碑、依赖、风险） |
-| `drawio-skill` | 架构图、服务关系图、ER 图 |
-
-### 设计（Design）
-
-| Skill | 说明 |
-|-------|------|
-| `stitch-prototype-skill` | 快速出原型方案、迭代 |
-| `mastergo-magic-skill` | MasterGo 设计稿到代码协作 |
-| `prd-to-mastergo-interaction-skill` | PRD 转 MasterGo 交互原型 |
-| `drawio-skill` | 用户旅程、信息架构、页面流程 |
-
-### 产品（Product）
-
-| Skill | 说明 |
-|-------|------|
-| `usecase-prd-skill` | 用例化 PRD（动作→响应→验收） |
-| `task-plan-skill` | 任务拆解与排期 |
-| `weekly-report-skill` | 周报 / 月报结构化输出 |
-| `prd-to-mastergo-interaction-skill` | 推动需求向交互稿过渡 |
-
-### 通用安装型技能
-
-| Skill | 分类 | 说明 |
-|-------|------|------|
-| `find-skills` | 技能发现 | 在仓库中查找适合当前任务的技能 |
-| `personnel-recruitment` | 人力资源 | 结构化招聘（JD、简历、面试） |
-| `hardware-agent-prompt-skill` | 硬件 AI | 硬件智能体提示词与人格设定 |
-| `elon-musk-perspective` | 思维模型 | 第一性原理、白痴指数、五步算法 |
+| 角色 | 推荐 Skill |
+|------|-----------|
+| 前端 | `stitch-prototype-skill` · `mastergo-magic-skill` · `drawio-skill` · `mermaid-sequence-from-flow` |
+| 后端 | `restful-api-design-skill` · `task-plan-skill` · `drawio-skill` |
+| 设计 | `stitch-prototype-skill` · `mastergo-magic-skill` · `prd-to-mastergo-interaction-skill` · `drawio-skill` |
+| 产品 | `usecase-prd-skill` · `task-plan-skill` · `weekly-report-skill` · `prd-to-mastergo-interaction-skill` |
+| 通用安装 | `find-skills` · `personnel-recruitment` · `hardware-agent-prompt-skill` · `elon-musk-perspective` |
 
 ---
 
-## 常见问题
+## 10. 常见问题
 
-### Q: 为什么有 `[WARN] Unresolved placeholders ...`？
+### Q1：`[WARN] Unresolved placeholders ...`？
 
-`env.json` 中对应键的值为空，且 OS 环境变量也未设置。处理方式：
+`env.json` 中对应键值为空，且 OS 环境变量也未设置。三种解决方式：
 
-1. 在 `env.json` 填入真实值；或
-2. `setx OPENAI_API_KEY xxx`（Windows） / `export OPENAI_API_KEY=xxx`（*nix）后重跑；或
-3. 若该占位符不再需要，从模板中移除（如已弃用的 OpenICU / OpenRouter）。
+1. 在 `env.json` 填入真实值；
+2. `setx OPENAI_API_KEY xxx`（Windows） / `export OPENAI_API_KEY=xxx`（*nix）后重跑；
+3. 若该占位符不需要，确认它是否在 `provider.*` / `mcpServers.*` 容器键下——是的话脚本会**自动移除**该子项；不是的话从模板里删掉。
 
-### Q: 提示 "需要管理员权限"？
+### Q2：Windows 下提示"需要管理员权限"？
 
-Windows 下 Junction 创建需要管理员权限。右键终端 → "以管理员身份运行"。
+Junction 创建需要管理员权限。右键终端 → "以管理员身份运行"。
 
-### Q: 已有配置被覆盖了怎么办？
+### Q3：已有配置被覆盖了怎么办？
 
 脚本默认不覆盖已有配置。要覆盖，加 `--force` / `-f`。
 
-### Q: 修改 `agents/rules/` 后需要重新运行脚本吗？
+### Q4：修改 `agents/rules/` 后需要重新运行脚本吗？
 
-不需要。Junction 会自动同步。
+不需要。Junction 是目录链接，会自动同步。
 
-### Q: 仅想刷新某个 IDE 的配置？
+### Q5：如何只刷新某个 IDE？
 
 ```bash
 python scripts/init-ide.py -i Cursor -f
 ```
+
+### Q6：Codex / Claude 切到别的 LLM？
+
+```bash
+python scripts/init-env.py --provider <provider_name> -a Generate
+```
+
+### Q7：OpenCode 里看不到我新加的 provider？
+
+OpenCode 是从 `opencode.json` 的 `provider` 段读取的。新加 provider 需要：
+1. `env.json` 加节点
+2. `opencode.template.json` 加引用
+3. 重新生成
