@@ -12,12 +12,6 @@
       "options": {
         "baseURL": "${LLM_OPENICU_OPENAI_BASE_URL}",
         "apiKey": "${LLM_OPENICU_OPENAI_API_KEY}"
-      },
-      "models": {
-        "gpt-4o": { "name": "GPT-4o" },
-        "gpt-4o-mini": { "name": "GPT-4o Mini" },
-        "claude-sonnet-4-20250514": { "name": "Claude Sonnet 4" },
-        "claude-haiku-4-20250514": { "name": "Claude Haiku 4" }
       }
     },
     "openai": {
@@ -27,9 +21,10 @@
       }
     },
     "anthropic": {
+      "name": "Anthropic",
       "options": {
-        "baseURL": "${LLM_OPENICU_ANTHROPIC_BASE_URL}",
-        "apiKey": "${LLM_OPENICU_ANTHROPIC_API_KEY}"
+        "baseURL": "${LLM_ANTHROPIC_ANTHROPIC_BASE_URL}",
+        "apiKey": "${LLM_ANTHROPIC_ANTHROPIC_API_KEY}"
       }
     },
     "openrouter": {
@@ -38,11 +33,6 @@
       "options": {
         "baseURL": "${LLM_OPENROUTER_OPENAI_BASE_URL}",
         "apiKey": "${LLM_OPENROUTER_OPENAI_API_KEY}"
-      },
-      "models": {
-        "anthropic/claude-sonnet-4": { "name": "Claude Sonnet 4" },
-        "openai/gpt-4o": { "name": "GPT-4o" },
-        "deepseek/deepseek-chat-v3-0324": { "name": "DeepSeek V3" }
       }
     },
     "deepseek": {
@@ -51,10 +41,6 @@
       "options": {
         "baseURL": "${LLM_DEEPSEEK_OPENAI_BASE_URL}",
         "apiKey": "${LLM_DEEPSEEK_OPENAI_API_KEY}"
-      },
-      "models": {
-        "deepseek-chat": { "name": "DeepSeek Chat" },
-        "deepseek-reasoner": { "name": "DeepSeek Reasoner" }
       }
     },
     "volcengine": {
@@ -63,14 +49,10 @@
       "options": {
         "baseURL": "${LLM_VOLCENGINE_OPENAI_BASE_URL}",
         "apiKey": "${LLM_VOLCENGINE_OPENAI_API_KEY}"
-      },
-      "models": {
-        "doubao-pro-32k": { "name": "Doubao Pro 32K" },
-        "doubao-1-5-pro-32k": { "name": "Doubao 1.5 Pro 32K" }
       }
     }
   },
-  "model": "openicu/claude-sonnet-4-20250514",
-  "small_model": "openicu/gpt-4o-mini",
+  "model": "${ANTHROPIC_MODEL:-anthropic/claude-sonnet-4}",
+  "small_model": "openai/gpt-4o-mini",
   "mcp": {}
 }

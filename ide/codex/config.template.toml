@@ -1,6 +1,6 @@
 model_provider = "OpenAI"
-model = "gpt-5.4"
-review_model = "gpt-5.4"
+model = "${OPENAI_MODEL:-gpt-5.4}"
+review_model = "${OPENAI_MODEL:-gpt-5.4}"
 model_reasoning_effort = "high"
 disable_response_storage = true
 network_access = "enabled"

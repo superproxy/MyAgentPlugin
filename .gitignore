@@ -45,3 +45,4 @@ ENV/
 .env.*.local
 agents/skills/ui-ux-pro-max/scripts/__pycache__/core.cpython-314.pyc
 ide/codex/config.toml
+/ide/claude/settings.json

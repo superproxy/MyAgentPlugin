@@ -16,6 +16,7 @@ Uses directory junctions so source is the single source of truth.
 - .mcp.json         : Symlink/Copy -> source mcp/mcp.json
 - .cursor/mcp.json   : Generated (mcpServers key)
 - .codex/config.toml : Generated (TOML format)
+- .claude/settings.json : Generated (from template + env.json)
 - opencode.json       : Generated (OpenCode format)
 """
 
@@ -313,6 +314,13 @@ def _resolve_placeholders(obj, env_map: dict[str, str]) -> tuple[any, int]:
             if placeholder in obj:
                 obj = obj.replace(placeholder, value)
                 replaced += 1
+        for m in re.finditer(r"\$\{(\w+):-(.*?)\}", obj):
+            var_name = m.group(1)
+            default_value = m.group(2)
+            full_match = m.group(0)
+            resolved = env_map.get(var_name, default_value)
+            obj = obj.replace(full_match, resolved)
+            replaced += 1
         return obj, replaced
     if isinstance(obj, dict):
         total = 0
@@ -392,8 +400,8 @@ def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
             raw = llm_section.get("_active_protocol", "openai")
             active_protocols = [p.strip() for p in str(raw).split("|") if p.strip()]
         protocol_env_map = {
-            "openai": {"base_url": "OPEN_AI_API_BASE_URL", "api_key": "OPEN_AI_API_KEY"},
-            "anthropic": {"base_url": "ANTHROPIC_BASE_URL", "api_key": "ANTHROPIC_AUTH_TOKEN"},
+            "openai": {"base_url": "OPEN_AI_API_BASE_URL", "api_key": "OPEN_AI_API_KEY", "model": "OPENAI_MODEL"},
+            "anthropic": {"base_url": "ANTHROPIC_BASE_URL", "api_key": "ANTHROPIC_AUTH_TOKEN", "model": "ANTHROPIC_MODEL"},
         }
         for section_key, section_value in env_config.items():
             if section_key == "_description":
@@ -405,15 +413,32 @@ def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
                     if not isinstance(provider_value, dict):
                         continue
                     is_active = provider_name == active_provider
+                    provider_upper = provider_name.upper().replace("-", "_")
                     for protocol_name, protocol_value in provider_value.items():
                         if protocol_name.startswith("_"):
                             continue
                         if not isinstance(protocol_value, dict):
                             continue
+                        protocol_upper = protocol_name.upper().replace("-", "_")
+                        for k, v in protocol_value.items():
+                            if k.startswith("_") or k == "models":
+                                continue
+                            if not v or not str(v).strip():
+                                continue
+                            named_key = f"LLM_{provider_upper}_{protocol_upper}_{k.upper()}"
+                            env_map[named_key] = str(v)
                         if is_active and protocol_name in active_protocols:
                             mapping = protocol_env_map.get(protocol_name, {})
+                            models_dict = protocol_value.get("models", {})
+                            if isinstance(models_dict, dict) and models_dict:
+                                default_model = next(iter(models_dict.keys()), "")
+                                std_model_key = mapping.get("model")
+                                if std_model_key and default_model:
+                                    env_map[std_model_key] = default_model
                             for k, v in protocol_value.items():
-                                if k.startswith("_"):
+                                if k.startswith("_") or k == "models":
+                                    continue
+                                if not v or not str(v).strip():
                                     continue
                                 std_key = mapping.get(k)
                                 if std_key:
@@ -442,6 +467,31 @@ def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
         if replaced > 0:
             print(f"{COLOR_GREEN}[OK] Resolved {replaced} placeholder(s) from env.json{COLOR_RESET}")
 
+    if env_file and env_file.exists():
+        with open(env_file, "r", encoding="utf-8-sig") as f:
+            env_config = json.load(f)
+        llm_section = env_config.get("llm", {})
+        if isinstance(llm_section, dict):
+            providers_config = config.get("provider", {})
+            for provider_name, provider_value in llm_section.items():
+                if provider_name.startswith("_"):
+                    continue
+                if not isinstance(provider_value, dict):
+                    continue
+                if provider_name not in providers_config:
+                    continue
+                merged_models = {}
+                for protocol_name, protocol_value in provider_value.items():
+                    if protocol_name.startswith("_"):
+                        continue
+                    if not isinstance(protocol_value, dict):
+                        continue
+                    models_dict = protocol_value.get("models", {})
+                    if isinstance(models_dict, dict):
+                        merged_models.update(models_dict)
+                if merged_models:
+                    providers_config[provider_name]["models"] = merged_models
+
     remaining = []
     _collect_placeholders(config, remaining)
     if remaining:
@@ -458,8 +508,9 @@ def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
 
 def _collect_placeholders(obj, result: list[str]) -> None:
     if isinstance(obj, str):
-        for m in re.finditer(r"\$\{(\w+)\}", obj):
-            result.append(m.group(1))
+        for m in re.finditer(r"\$\{(\w+)(?::-.*?)?\}", obj):
+            if ":-" not in m.group(0):
+                result.append(m.group(1))
     elif isinstance(obj, dict):
         for v in obj.values():
             _collect_placeholders(v, result)
@@ -803,6 +854,92 @@ def init_codex(target_dir: Path, source_rules_dir: Path, source_mcp_file: Path,
     return "codex"
 
 
+def _generate_claude_settings(template_file: Path, target_file: Path, env_file: Path, force: bool) -> None:
+    if not template_file.exists():
+        print(f"{COLOR_YELLOW}[!] Claude settings template not found: {template_file}{COLOR_RESET}")
+        return
+
+    if target_file.exists():
+        if not force:
+            print(f"{COLOR_YELLOW}[!] Claude settings.json already exists, use --force to overwrite{COLOR_RESET}")
+            return
+        target_file.unlink()
+
+    with open(template_file, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    env_map = {}
+    if env_file and env_file.exists():
+        with open(env_file, "r", encoding="utf-8-sig") as f:
+            env_config = json.load(f)
+        active_provider = ""
+        active_protocols = ["openai"]
+        llm_section = env_config.get("llm", {})
+        if isinstance(llm_section, dict):
+            active_provider = llm_section.get("_active_provider", "")
+            raw = llm_section.get("_active_protocol", "openai")
+            active_protocols = [p.strip() for p in str(raw).split("|") if p.strip()]
+        protocol_env_map = {
+            "openai": {"base_url": "OPEN_AI_API_BASE_URL", "api_key": "OPEN_AI_API_KEY", "model": "OPENAI_MODEL"},
+            "anthropic": {"base_url": "ANTHROPIC_BASE_URL", "api_key": "ANTHROPIC_AUTH_TOKEN", "model": "ANTHROPIC_MODEL"},
+        }
+        for provider_name, provider_value in llm_section.items():
+            if provider_name.startswith("_"):
+                continue
+            if not isinstance(provider_value, dict):
+                continue
+            is_active = provider_name == active_provider
+            for protocol_name, protocol_value in provider_value.items():
+                if protocol_name.startswith("_"):
+                    continue
+                if not isinstance(protocol_value, dict):
+                    continue
+                if is_active and protocol_name in active_protocols:
+                    mapping = protocol_env_map.get(protocol_name, {})
+                    models_dict = protocol_value.get("models", {})
+                    if isinstance(models_dict, dict) and models_dict:
+                        default_model = next(iter(models_dict.keys()), "")
+                        std_model_key = mapping.get("model")
+                        if std_model_key and default_model:
+                            env_map[std_model_key] = default_model
+                    for k, v in protocol_value.items():
+                        if k.startswith("_") or k == "models":
+                            continue
+                        if not v or not str(v).strip():
+                            continue
+                        std_key = mapping.get(k)
+                        if std_key:
+                            env_map[std_key] = str(v)
+                        else:
+                            env_map[k] = str(v)
+        for section_key in ("mcp", "misc"):
+            section_value = env_config.get(section_key, {})
+            if not isinstance(section_value, dict):
+                continue
+            for k, v in section_value.items():
+                if k.startswith("_"):
+                    continue
+                if v and str(v).strip():
+                    env_map[k] = str(v)
+
+    if env_map:
+        config, replaced = _resolve_placeholders(config, env_map)
+        if replaced > 0:
+            print(f"{COLOR_GREEN}[OK] Resolved {replaced} placeholder(s) in Claude settings{COLOR_RESET}")
+
+    remaining = []
+    _collect_placeholders(config, remaining)
+    if remaining:
+        print(f"{COLOR_YELLOW}[!] Unresolved placeholders in Claude settings: {', '.join(sorted(set(remaining)))}{COLOR_RESET}")
+
+    target_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(target_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+    print(f"{COLOR_GREEN}[OK] Claude settings generated: {target_file}{COLOR_RESET}")
+
+
 def init_claude(target_dir: Path, source_rules_dir: Path, source_mcp_file: Path,
                 source_skills_dir: Path, source_agents_md: Path, force: bool) -> str | None:
     print(f"\n{COLOR_MAGENTA}--- Claude IDE ---{COLOR_RESET}")
@@ -819,6 +956,11 @@ def init_claude(target_dir: Path, source_rules_dir: Path, source_mcp_file: Path,
         print(f"{COLOR_YELLOW}[!] Source rules/ not found, skipping{COLOR_RESET}")
 
     copy_file_safe(source_mcp_file, claude_dir / "mcp.json", ".claude/mcp.json", force)
+
+    source_dir = source_rules_dir.parent.parent
+    claude_settings_template = source_dir / "ide" / "claude" / "settings.template.json"
+    env_file = source_dir / "env.json"
+    _generate_claude_settings(claude_settings_template, claude_dir / "settings.json", env_file, force)
 
     copy_skills_safe(source_skills_dir, claude_skills_dir, ".claude/skills/", force)
 
@@ -1139,6 +1281,8 @@ def main() -> None:
         print(f"  {COLOR_DARKGRAY}.cursor/mcp.json     (generated, mcpServers key){COLOR_RESET}")
     if "codex" in processed:
         print(f"  {COLOR_DARKGRAY}.codex/config.toml    (generated, TOML format){COLOR_RESET}")
+    if "claude" in processed:
+        print(f"  {COLOR_DARKGRAY}.claude/settings.json (generated, from template + env.json){COLOR_RESET}")
     if "opencode" in processed:
         print(f"  {COLOR_DARKGRAY}.opencode/opencode.json (generated, OpenCode format){COLOR_RESET}")
     if "idea" in processed:

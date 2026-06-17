@@ -111,7 +111,84 @@ python scripts/init-env.py --provider deepseek -a Generate
 | `${LLM_<PROVIDER>_<PROTOCOL>_<FIELD>}` | env.json 中**任意 provider** 的字段 | OpenCode（多 provider 并存） |
 | `${OPENAI_API_KEY}` / `${ANTHROPIC_*}` | 兼容性标准化键（来自 active provider） | 历史模板 |
 
-### 3.6 密钥清单（MCP / 业务）
+### 3.6 模型配置说明
+
+#### 模型定义格式
+
+每个 provider 的每个协议下，`models` 字段采用**对象格式**定义多个模型：
+
+```json
+"openrouter": {
+  "openai": {
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key": "sk-xxx",
+    "models": {
+      "anthropic/claude-opus-4.8-fast": { "name": "Claude Opus 4.8 Fast" },
+      "anthropic/claude-sonnet-4":     { "name": "Claude Sonnet 4" },
+      "openai/gpt-5.5":               { "name": "GPT-5.5" }
+    }
+  }
+}
+```
+
+- **Key**（如 `anthropic/claude-opus-4.8-fast`）：模型 ID，即实际传给 API 的 `model` 参数
+- **`name`**：人类可读名称，用于 OpenCode 等 IDE 的 UI 展示
+- **默认模型**：`models` 对象的**第一个 Key** 自动作为该协议的默认模型
+
+#### 模型与协议的映射
+
+| 协议 | 环境变量 | 用途 |
+|------|---------|------|
+| `openai` | `OPENAI_MODEL` | Codex、OpenCode（OpenAI 协议）的 `model` 字段 |
+| `anthropic` | `ANTHROPIC_MODEL` | Claude（Anthropic 协议）的 `model` 字段 |
+
+切换 `_active_provider` 后，脚本自动从对应协议的 `models` 中提取第一个 Key 注入到对应环境变量。
+
+#### 当前模型目录
+
+| Provider | 协议 | 模型 ID | 显示名 |
+|----------|------|---------|--------|
+| **openicu** | openai | `gpt-5.5` | GPT-5.5 |
+| | openai | `gpt-5.4` | GPT-5.4 |
+| | anthropic | `claude-sonnet-4-20250514` | Claude Sonnet 4 |
+| | anthropic | `claude-haiku-4-20250514` | Claude Haiku 4 |
+| **openrouter** | openai | `anthropic/claude-opus-4.8-fast` | Claude Opus 4.8 Fast |
+| | openai | `anthropic/claude-opus-4.8` | Claude Opus 4.8 |
+| | openai | `anthropic/claude-sonnet-4` | Claude Sonnet 4 |
+| | openai | `openai/gpt-5.5` | GPT-5.5 |
+| | openai | `deepseek/deepseek-v4-pro` | DeepSeek V4 Pro |
+| | anthropic | `~anthropic/claude-sonnet-latest` | Claude Sonnet Latest |
+| | anthropic | `anthropic/claude-sonnet-4` | Claude Sonnet 4 |
+| | anthropic | `anthropic/claude-opus-4.8` | Claude Opus 4 |
+| **openai** | openai | `gpt-5.5` | GPT-5.5 |
+| | openai | `gpt-5.4` | GPT-5.4 |
+| **anthropic** | anthropic | `anthropic/claude-opus-4.8-fast` | Claude Opus 4.8 Fast |
+| | anthropic | `anthropic/claude-opus-4.8` | Claude Opus 4.8 |
+| **deepseek** | openai | `deepseek/deepseek-v4-pro` | DeepSeek V4 Pro |
+| | openai | `deepseek/deepseek-v4-flash` | DeepSeek V4 Flash |
+| | anthropic | `deepseek/deepseek-v4-pro` | DeepSeek V4 Pro |
+| | anthropic | `deepseek/deepseek-v4-flash` | DeepSeek V4 Flash |
+| **volcengine** | openai | `doubao-pro-32k` | Doubao Pro 32K |
+| | openai | `doubao-1-5-pro-32k` | Doubao 1.5 Pro 32K |
+
+> 💡 **OpenRouter 模型 ID 前缀**：OpenRouter 的模型 ID 需带 `provider/` 前缀（如 `anthropic/claude-sonnet-4`）。Anthropic 协议下使用 `~` 前缀（如 `~anthropic/claude-sonnet-latest`）表示 OpenRouter 的路由标记。
+
+#### 新增模型
+
+在 `env.json` 对应 provider/protocol 的 `models` 中添加条目即可：
+
+```json
+"models": {
+  "existing-model": { "name": "Existing Model" },
+  "new-model-id":   { "name": "New Model Display Name" }
+}
+```
+
+重新运行 `python scripts/init-env.py -a Generate`，新模型会自动注入到 OpenCode 等多模型 IDE 的配置中。如需更改默认模型，将目标模型 Key 移到 `models` 对象的第一位。
+
+---
+
+### 3.7 密钥清单（MCP / 业务）
 
 | 变量名 | 用途 |
 |--------|------|

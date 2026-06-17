@@ -40,10 +40,12 @@ PROTOCOL_ENV_MAP = {
     "openai": {
         "base_url": "OPEN_AI_API_BASE_URL",
         "api_key": "OPEN_AI_API_KEY",
+        "model": "OPENAI_MODEL",
     },
     "anthropic": {
         "base_url": "ANTHROPIC_BASE_URL",
         "api_key": "ANTHROPIC_AUTH_TOKEN",
+        "model": "ANTHROPIC_MODEL",
     },
 }
 
@@ -63,6 +65,13 @@ def read_env_config(env_file: Path, silent: bool = False) -> dict:
         return json.load(f)
 
 
+DIRECT_FIELD_KEYS = {"base_url", "api_key", "models"}
+
+
+def _is_flat_provider(provider_value: dict) -> bool:
+    return any(k in DIRECT_FIELD_KEYS for k in provider_value)
+
+
 def flatten_env_config(env_config: dict, active_provider: str, active_protocols: list[str]) -> dict:
     flat = {}
     llm = env_config.get("llm", {})
@@ -74,7 +83,14 @@ def flatten_env_config(env_config: dict, active_provider: str, active_protocols:
             if not isinstance(provider_value, dict):
                 continue
             is_active = provider_name == active_provider
-            for protocol_name, protocol_value in provider_value.items():
+
+            if _is_flat_provider(provider_value):
+                flat_protocol_name = provider_name
+                protocols_to_iter = {flat_protocol_name: provider_value}
+            else:
+                protocols_to_iter = provider_value
+
+            for protocol_name, protocol_value in protocols_to_iter.items():
                 if protocol_name.startswith("_"):
                     continue
                 if not isinstance(protocol_value, dict):
@@ -93,14 +109,29 @@ def flatten_env_config(env_config: dict, active_provider: str, active_protocols:
                 for k, v in protocol_value.items():
                     if k.startswith("_"):
                         continue
+                    if k == "models" and isinstance(v, dict):
+                        named_key = f"LLM_{provider_upper}_{protocol_upper}_MODELS"
+                        flat[named_key] = json.dumps(v, ensure_ascii=False)
+                        default_model = next(iter(v.keys()), "")
+                        if default_model:
+                            default_model_key = f"LLM_{provider_upper}_{protocol_upper}_MODEL"
+                            flat[default_model_key] = default_model
+                        continue
                     field_upper = k.upper()
                     named_key = f"LLM_{provider_upper}_{protocol_upper}_{field_upper}"
                     flat[named_key] = v
 
+                models_dict = protocol_value.get("models", {})
+                default_model = next(iter(models_dict.keys()), "") if isinstance(models_dict, dict) else ""
+
                 if is_active:
                     env_mapping = PROTOCOL_ENV_MAP.get(protocol_name, {})
+                    std_model_key = env_mapping.get("model")
+                    if std_model_key and default_model:
+                        flat[std_model_key] = default_model
+                        print(f"    {COLOR_GREEN}models -> {std_model_key} = {default_model}{COLOR_RESET}")
                     for k, v in protocol_value.items():
-                        if k.startswith("_"):
+                        if k.startswith("_") or k == "models":
                             continue
                         std_key = env_mapping.get(k)
                         if std_key:
@@ -114,8 +145,14 @@ def flatten_env_config(env_config: dict, active_provider: str, active_protocols:
                         flat["OPENAI_API_KEY"] = protocol_value.get("api_key", "")
 
                 if is_active_protocol:
+                    if default_model:
+                        flat[f"LLM_ACTIVE_{protocol_name.upper()}_MODEL"] = default_model
+                        flat.setdefault("LLM_ACTIVE_MODEL", default_model)
+                    if isinstance(models_dict, dict) and models_dict:
+                        flat[f"LLM_ACTIVE_{protocol_name.upper()}_MODELS"] = json.dumps(models_dict, ensure_ascii=False)
+                        flat.setdefault("LLM_ACTIVE_MODELS", json.dumps(models_dict, ensure_ascii=False))
                     for k, v in protocol_value.items():
-                        if k.startswith("_"):
+                        if k.startswith("_") or k == "models":
                             continue
                         protocol_active_key = f"LLM_ACTIVE_{protocol_name.upper()}_{k.upper()}"
                         flat[protocol_active_key] = v
@@ -323,7 +360,10 @@ def invoke_export_shell(flat_config: dict) -> None:
 
 def _has_unresolved_placeholder(value) -> bool:
     if isinstance(value, str):
-        return bool(re.search(r"\$\{\w+\}", value))
+        for m in re.finditer(r"\$\{(\w+)(?::-.*?)?\}", value):
+            if ":-" not in m.group(0):
+                return True
+        return False
     if isinstance(value, dict):
         return any(_has_unresolved_placeholder(v) for v in value.values())
     if isinstance(value, list):
@@ -384,12 +424,27 @@ def invoke_generate_step(
 
     replaced = 0
     entries = get_env_entries(flat_config)
+    env_map = {k: v for k, v in entries}
     for key, value in entries:
         placeholder = "${" + key + "}"
         if placeholder in template_content:
             template_content = template_content.replace(placeholder, value)
             print(f"  {COLOR_GREEN}[REPLACED] {placeholder}{COLOR_RESET}")
             replaced += 1
+
+    default_replaced = 0
+    for m in re.finditer(r"\$\{(\w+):-(.*?)\}", template_content):
+        var_name = m.group(1)
+        default_value = m.group(2)
+        full_match = m.group(0)
+        resolved = env_map.get(var_name, default_value)
+        template_content = template_content.replace(full_match, resolved)
+        if var_name in env_map:
+            print(f"  {COLOR_GREEN}[REPLACED] {full_match} -> (env){resolved}{COLOR_RESET}")
+        else:
+            print(f"  {COLOR_CYAN}[DEFAULT] {full_match} -> {resolved}{COLOR_RESET}")
+        default_replaced += 1
+    replaced += default_replaced
 
     if prune and template_file.suffix.lower() == ".json":
         new_content, pruned_map = prune_unresolved_blocks(template_content)
@@ -415,6 +470,42 @@ def invoke_generate_step(
     print()
     print(f"  {COLOR_CYAN}Result: {replaced} placeholder(s) replaced, output={output_file}{COLOR_RESET}")
     print()
+
+
+def _inject_opencode_models(opencode_file: Path, env_config: dict) -> None:
+    if not opencode_file.exists():
+        return
+    with open(opencode_file, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    llm_section = env_config.get("llm", {})
+    if not isinstance(llm_section, dict):
+        return
+    providers_config = config.get("provider", {})
+    injected = 0
+    for provider_name, provider_value in llm_section.items():
+        if provider_name.startswith("_"):
+            continue
+        if not isinstance(provider_value, dict):
+            continue
+        if provider_name not in providers_config:
+            continue
+        merged_models = {}
+        for protocol_name, protocol_value in provider_value.items():
+            if protocol_name.startswith("_"):
+                continue
+            if not isinstance(protocol_value, dict):
+                continue
+            models_dict = protocol_value.get("models", {})
+            if isinstance(models_dict, dict):
+                merged_models.update(models_dict)
+        if merged_models:
+            providers_config[provider_name]["models"] = merged_models
+            injected += 1
+    if injected > 0:
+        with open(opencode_file, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        print(f"  {COLOR_GREEN}[MODELS] Injected models into {injected} provider(s) in {opencode_file}{COLOR_RESET}")
 
 
 def main():
@@ -520,6 +611,7 @@ def main():
         opencode_output = PROJECT_ROOT / "ide" / "opencode" / "opencode.json"
         if opencode_template.exists():
             invoke_generate_step(flat_config, opencode_template, opencode_output)
+            _inject_opencode_models(opencode_output, env_config)
 
         codex_auth_template = PROJECT_ROOT / "ide" / "codex" / "auth.template.json"
         codex_auth_output = PROJECT_ROOT / "ide" / "codex" / "auth.json"
@@ -530,6 +622,11 @@ def main():
         codex_config_output = PROJECT_ROOT / "ide" / "codex" / "config.toml"
         if codex_config_template.exists():
             invoke_generate_step(flat_config, codex_config_template, codex_config_output)
+
+        claude_settings_template = PROJECT_ROOT / "ide" / "claude" / "settings.template.json"
+        claude_settings_output = PROJECT_ROOT / "ide" / "claude" / "settings.json"
+        if claude_settings_template.exists():
+            invoke_generate_step(flat_config, claude_settings_template, claude_settings_output)
 
     print(f"{COLOR_CYAN}========================================{COLOR_RESET}")
     print(f"{COLOR_CYAN}  Done.{COLOR_RESET}")
