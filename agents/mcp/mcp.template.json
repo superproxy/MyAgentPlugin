@@ -1,11 +1,21 @@
 {
   "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./"
+      ],
+      "env": {}
+    },
     "12306-mcp": {
       "command": "npx",
       "args": [
         "-y",
         "12306-mcp"
-      ]
+      ],
+      "disabled": true
     },
     "amap-maps-mcp": {
       "command": "npx",
@@ -15,7 +25,8 @@
       ],
       "env": {
         "AMAP_MAPS_API_KEY": "${AMAP_MAPS_API_KEY}"
-      }
+      },
+      "disabled": true
     },
     "wecom": {
       "command": "uvx",
@@ -24,7 +35,8 @@
       ],
       "env": {
         "WECOM_WEBHOOK_URL": "${WECOM_WEBHOOK_URL}"
-      }
+      },
+      "disabled": true
     },
     "BOSS直聘": {
       "command": "npx",
@@ -43,7 +55,8 @@
       "command": "npx",
       "args": [
         "@playwright/mcp@latest"
-      ]
+      ],
+      "disabled": true
     },
     "tavily-mcp": {
       "command": "npx",
@@ -55,7 +68,7 @@
         "TAVILY_API_KEY": "${TAVILY_API_KEY}",
         "DEFAULT_PARAMETERS": "{\"include_images\": true, \"max_results\": 15, \"search_depth\": \"advanced\"}"
       },
-       "disabled": true
+      "disabled": true
     },
     "firecrawl-mcp": {
       "command": "npx",
@@ -66,7 +79,7 @@
       "env": {
         "FIRECRAWL_API_KEY": "${FIRECRAWL_API_KEY}"
       },
-       "disabled": true
+      "disabled": true
     },
     "arxiv-paper-mcp": {
       "command": "npx",
@@ -75,18 +88,16 @@
         "@langgpt/arxiv-paper-mcp@latest"
       ],
       "env": {},
-       "disabled": true
+      "disabled": true
     },
-
     "zread": {
       "type": "streamableHttp",
       "url": "https://open.bigmodel.cn/api/mcp/zread/mcp",
       "headers": {
         "Authorization": "Bearer ${ZREAD_API_KEY}"
       },
-       "disabled": true
+      "disabled": true
     },
-
     "yuque-mcp": {
       "command": "npx",
       "args": [
@@ -99,7 +110,7 @@
       "env": {
         "YUQUE_TOKEN": "${YUQUE_TOKEN}"
       },
-       "disabled": true
+      "disabled": true
     },
     "stitch": {
       "type": "http",
@@ -107,7 +118,7 @@
       "headers": {
         "X-Goog-Api-Key": "${STITCH_API_KEY}"
       },
-       "disabled": true
+      "disabled": true
     },
     "mastergo": {
       "command": "npx",
@@ -115,7 +126,8 @@
         "-y",
         "@mastergo/vibe-mcp",
         "--url=http://localhost:50678"
-      ]
+      ],
+      "disabled": true
     },
     "mastergo-magic-mcp": {
       "command": "npx",
@@ -127,7 +139,8 @@
       ],
       "env": {
         "NPM_CONFIG_REGISTRY": "https://registry.npmjs.org/"
-      }
+      },
+      "disabled": true
     },
     "Redis": {
       "command": "redis",
@@ -138,7 +151,7 @@
         "npx",
         "@modelcontextprotocol/server-redis"
       ],
-       "disabled": true
+      "disabled": true
     },
     "context7": {
       "type": "http",
@@ -146,7 +159,48 @@
       "headers": {
         "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
       },
+      "disabled": true
+    },
+
+
+
+    "my-rag": {
+      "command": "uvx",
+      "args": ["mcp-rag", "server"],
+      "env": {
+        "OPENAI_API_KEY": "${EMBEDDING_API_KEY}",
+        "OPENAI_BASE": "${EMBEDDING_BASE_URL}",
+        "OPENAI_EMBEDDING_MODEL": "${EMBEDDING_MODEL}"
+      },
+      "disabled": true
+    },
+
+    "volc-speech": {
+      "command": "uvx",
+      "args": ["--from", "mcp-server-speech", "mcp-server-speech"],
+      "env": {
+        "VOLC_APPID": "${TTS_VOLCENGINE_APPID}",
+        "VOLC_TOKEN": "${TTS_VOLCENGINE_TOKEN}",
+        "VOLC_CLUSTER": "${TTS_VOLCENGINE_CLUSTER}",
+        "VOLC_VOICE_TYPE": "${TTS_VOLCENGINE_VOICE_TYPE}"
+      },
+      "disabled": true
+    },
+
+    "doubao-vision": {
+      "command": "npx",
+      "args": ["-y", "@bestmfy/vision-understanding-mcp"],
+      "env": { "DOUBAO_API_KEY": "${VISION_VOLCENGINE_API_KEY}" },
        "disabled": true
+    },
+
+    "elevenlabs": {
+      "command": "npx",
+      "args": ["-y", "@elevenlabs/mcp"],
+      "env": {
+        "ELEVENLABS_API_KEY": "${TTS_ELEVENLABS_API_KEY}"
+      }
     }
+
   }
 }

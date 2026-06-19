@@ -162,6 +162,52 @@ def flatten_env_config(env_config: dict, active_provider: str, active_protocols:
                     flat["LLM_ACTIVE_PROVIDER"] = provider_name
                     flat.setdefault("LLM_ACTIVE_PROTOCOL", protocol_name)
 
+    for section_key in ("embedding",):
+        section_value = env_config.get(section_key, {})
+        if not isinstance(section_value, dict):
+            continue
+        active_section_provider = section_value.get("_active_provider", "")
+        for provider_name, provider_value in section_value.items():
+            if provider_name.startswith("_"):
+                continue
+            if not isinstance(provider_value, dict):
+                continue
+            is_active = provider_name == active_section_provider
+            provider_upper = provider_name.upper().replace("-", "_")
+            section_upper = section_key.upper()
+            for k, v in provider_value.items():
+                if k.startswith("_"):
+                    continue
+                field_upper = k.upper()
+                flat[f"{section_upper}_{provider_upper}_{field_upper}"] = v
+            if is_active:
+                for k, v in provider_value.items():
+                    if k.startswith("_"):
+                        continue
+                    flat[f"{section_upper}_{k.upper()}"] = v
+
+    for section_key in ("tts", "asr", "vision"):
+        section_value = env_config.get(section_key, {})
+        if not isinstance(section_value, dict):
+            continue
+        section_upper = section_key.upper()
+        for provider_name, provider_value in section_value.items():
+            if provider_name.startswith("_") or not isinstance(provider_value, dict):
+                continue
+            provider_upper = provider_name.upper().replace("-", "_")
+            for k, v in provider_value.items():
+                if k.startswith("_"):
+                    continue
+                if isinstance(v, dict):
+                    for sub_k, sub_v in v.items():
+                        if sub_k.startswith("_"):
+                            continue
+                        sub_field_upper = sub_k.upper()
+                        flat[f"{section_upper}_{provider_upper}_{sub_field_upper}"] = sub_v
+                else:
+                    field_upper = k.upper()
+                    flat[f"{section_upper}_{provider_upper}_{field_upper}"] = v
+
     for section_key in ("mcp", "misc"):
         section_value = env_config.get(section_key, {})
         if not isinstance(section_value, dict):
@@ -423,9 +469,8 @@ def invoke_generate_step(
     template_content = template_file.read_text(encoding="utf-8")
 
     replaced = 0
-    entries = get_env_entries(flat_config)
-    env_map = {k: v for k, v in entries}
-    for key, value in entries:
+    env_map = {k: str(v) if v is not None else "" for k, v in flat_config.items()}
+    for key, value in env_map.items():
         placeholder = "${" + key + "}"
         if placeholder in template_content:
             template_content = template_content.replace(placeholder, value)
