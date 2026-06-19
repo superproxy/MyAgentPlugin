@@ -11,3 +11,6 @@ name = "OpenAI"
 base_url = "${LLM_ACTIVE_BASE_URL}"
 wire_api = "responses"
 requires_openai_auth = true
+
+[mcp_servers.my-rag]
+url = "http://localhost:8060/mcp"

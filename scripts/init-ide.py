@@ -194,7 +194,7 @@ def convert_to_cursor_mcp(source_file: Path, target_file: Path, force: bool) -> 
     for server_name, server in content.get("mcpServers", content).items():
         server_config = {}
 
-        if server.get("type") == "http" or server.get("url"):
+        if server.get("type") in ("http", "streamableHttp") or server.get("url"):
             server_config["url"] = server["url"]
             if server.get("headers"):
                 server_config["headers"] = dict(server["headers"])
@@ -246,9 +246,11 @@ def convert_to_codex_mcp(source_file: Path, target_file: Path, force: bool,
 
     mcp_lines = []
     for server_name, server in content.get("mcpServers", content).items():
+        if server.get("disabled", False):
+            continue
         mcp_lines.append(f"[mcp_servers.{server_name}]")
 
-        if server.get("type") == "http" or server.get("url"):
+        if server.get("type") in ("http", "streamableHttp") or server.get("url"):
             mcp_lines.append(f'url = {_toml_string(server["url"])}')
             if server.get("headers"):
                 headers = server["headers"]
@@ -261,6 +263,10 @@ def convert_to_codex_mcp(source_file: Path, target_file: Path, force: bool,
             if server.get("args"):
                 args_str = ", ".join(_toml_string(a) for a in server["args"])
                 mcp_lines.append(f"args = [{args_str}]")
+            timeout_ms = server.get("startupTimeout")
+            if timeout_ms is not None:
+                timeout_sec = max(1, int(timeout_ms / 1000))
+                mcp_lines.append(f"startup_timeout_sec = {timeout_sec}")
             if server.get("env"):
                 mcp_lines.append(f"[mcp_servers.{server_name}.env]")
                 for k, v in server["env"].items():
@@ -358,7 +364,7 @@ def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
     for server_name, server in content.get("mcpServers", content).items():
         server_config = {}
 
-        if server.get("type") == "http" or server.get("url"):
+        if server.get("type") in ("http", "streamableHttp") or server.get("url"):
             server_config["type"] = "remote"
             server_config["url"] = server["url"]
             if server.get("headers"):

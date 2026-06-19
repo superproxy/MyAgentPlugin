@@ -161,23 +161,29 @@
       },
       "disabled": true
     },
-
-
-
     "my-rag": {
       "command": "uvx",
-      "args": ["mcp-rag", "server"],
+      "args": [
+        "mcp-rag",
+        "serve"
+      ],
       "env": {
         "OPENAI_API_KEY": "${EMBEDDING_API_KEY}",
         "OPENAI_BASE": "${EMBEDDING_BASE_URL}",
         "OPENAI_EMBEDDING_MODEL": "${EMBEDDING_MODEL}"
       },
-      "disabled": true
+      "type": "streamableHttp",
+      "url": "http://localhost:8060/mcp",
+      "startupTimeout": 10000,
+      "disabled": false
     },
-
     "volc-speech": {
       "command": "uvx",
-      "args": ["--from", "mcp-server-speech", "mcp-server-speech"],
+      "args": [
+        "--from",
+        "mcp-server-speech",
+        "mcp-server-speech"
+      ],
       "env": {
         "VOLC_APPID": "${TTS_VOLCENGINE_APPID}",
         "VOLC_TOKEN": "${TTS_VOLCENGINE_TOKEN}",
@@ -186,21 +192,29 @@
       },
       "disabled": true
     },
-
-    "doubao-vision": {
-      "command": "npx",
-      "args": ["-y", "@bestmfy/vision-understanding-mcp"],
-      "env": { "DOUBAO_API_KEY": "${VISION_VOLCENGINE_API_KEY}" },
-       "disabled": true
+     
+    "seedance-mcp-server": {
+      "command": "uvx",
+      "args": [
+        "seedance-mcp-server"
+      ],
+      "env": {
+        "DOUBAO_BASE_URL": "${VISION_VOLCENGINE_BASE_URL}",
+        "DOUBAO_API_KEY": "${VISION_VOLCENGINE_API_KEY}",
+        "DOUBAO_MODEL": "${VISION_VOLCENGINE_MODEL}"
+      },
+      "disabled": false
     },
-
     "elevenlabs": {
-      "command": "npx",
-      "args": ["-y", "@elevenlabs/mcp"],
+      "command": "uvx",
+      "args": [
+        "elevenlabs-mcp"
+      ],
       "env": {
         "ELEVENLABS_API_KEY": "${TTS_ELEVENLABS_API_KEY}"
       }
+      ,
+      "disabled": false
     }
-
   }
 }

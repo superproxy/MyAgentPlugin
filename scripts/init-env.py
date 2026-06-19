@@ -202,8 +202,12 @@ def flatten_env_config(env_config: dict, active_provider: str, active_protocols:
                     for sub_k, sub_v in v.items():
                         if sub_k.startswith("_"):
                             continue
+                        if sub_k == "models" and isinstance(sub_v, dict):
+                            model_keys = list(sub_v.keys())
+                            if model_keys:
+                                flat.setdefault(f"{section_upper}_{provider_upper}_MODEL", model_keys[0])
                         sub_field_upper = sub_k.upper()
-                        flat[f"{section_upper}_{provider_upper}_{sub_field_upper}"] = sub_v
+                        flat.setdefault(f"{section_upper}_{provider_upper}_{sub_field_upper}", sub_v)
                 else:
                     field_upper = k.upper()
                     flat[f"{section_upper}_{provider_upper}_{field_upper}"] = v
