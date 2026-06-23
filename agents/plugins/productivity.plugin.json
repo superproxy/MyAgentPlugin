@@ -1,0 +1,19 @@
+{
+  "name": "productivity",
+  "version": "1.0.0",
+  "description": "生产力插件 - 提供需求分析、任务规划、项目管理能力",
+  "author": "MyAgentPlugin",
+  "mcpServers": {},
+  "skills": [
+    "usecase-prd-skill",
+    "task-plan-skill",
+    "weekly-report-skill",
+    "prd-to-mastergo-interaction-skill",
+    "brainstorming",
+    "openspec-explore",
+    "openspec-propose",
+    "openspec-apply-change",
+    "openspec-sync-specs",
+    "bid-to-tender-skill"
+  ]
+}

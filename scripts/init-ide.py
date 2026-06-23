@@ -1185,9 +1185,10 @@ def main() -> None:
     else:
         target_dir = Path.home()
 
-    source_agents_dir = source_dir / "agents"
+    # 优先从 .agents 目录加载，不存在则从 agents 加载
+    source_agents_dir = source_dir / ".agents"
     if not source_agents_dir.exists():
-        source_agents_dir = source_dir / ".agents"
+        source_agents_dir = source_dir / "agents"
     source_rules_dir = source_agents_dir / "rules"
     source_mcp_file = source_agents_dir / "mcp" / "mcp.json"
     source_skills_dir = source_agents_dir / "skills"

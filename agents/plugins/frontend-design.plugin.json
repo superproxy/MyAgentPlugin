@@ -1,0 +1,17 @@
+{
+  "name": "frontend-design",
+  "version": "1.0.0",
+  "description": "前端设计插件 - 提供 UI/UX 设计和前端开发能力",
+  "author": "MyAgentPlugin",
+  "mcpServers": {},
+  "skills": [
+    "stitch-prototype-skill",
+    "design-taste-frontend",
+    "high-end-visual-design",
+    "redesign-existing-projects",
+    "ui-ux-pro-max",
+    "frontend-design",
+    "mastergo-magic-skill",
+    "mermaid-sequence-from-flow"
+  ]
+}

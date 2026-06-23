@@ -1,0 +1,18 @@
+{
+  "name": "dev-tools",
+  "version": "1.0.0",
+  "description": "开发工具插件 - 提供 RESTful API 设计、测试、代码审查等能力",
+  "author": "MyAgentPlugin",
+  "mcpServers": {},
+  "skills": [
+    "restful-api-design-skill",
+    "systematic-debugging",
+    "test-driven-development",
+    "receiving-code-review",
+    "requesting-code-review",
+    "verification-before-completion",
+    "playwright-master",
+    "pptx",
+    "screenshot"
+  ]
+}

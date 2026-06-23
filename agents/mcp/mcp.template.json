@@ -98,6 +98,10 @@
       },
       "disabled": false
     },
+    "openaiDeveloperDocs": {
+      "url": "https://developers.openai.com/mcp",
+      "disabled": false
+    },
     "yuque-mcp": {
       "command": "npx",
       "args": [
@@ -192,7 +196,6 @@
       },
       "disabled": true
     },
-
     "seedance-mcp-server": {
       "command": "uvx",
       "args": [
@@ -212,21 +215,28 @@
       ],
       "env": {
         "ELEVENLABS_API_KEY": "${TTS_ELEVENLABS_API_KEY}"
-      }
-      ,
+      },
       "disabled": false
     },
-
-      "undoom-douyin-data-analysis": {
-        "command": "uvx",
-        "args": [
-          "--index-url",
-          "https://pypi.tuna.tsinghua.edu.cn/simple",
-          "--from",
-          "undoom-douyin-data-analysis",
-          "undoom-douyin-mcp"
-        ],
-        "disabled": "true"
-      }
+    "undoom-douyin-data-analysis": {
+      "command": "uvx",
+      "args": [
+        "--index-url",
+        "https://pypi.tuna.tsinghua.edu.cn/simple",
+        "--from",
+        "undoom-douyin-data-analysis",
+        "undoom-douyin-mcp"
+      ],
+      "disabled": "true"
+    },
+    "open-computer-use": {
+      "name": "open-computer-use",
+      "command": "npx",
+      "args": [
+        "-y",
+        "open-computer-use",
+        "mcp"
+      ]
+    }
   }
 }

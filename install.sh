@@ -1,7 +1,65 @@
 #!/bin/bash
-python3 scripts/init-env.py -a Generate
+echo "========================================"
+echo "  MyAgentPlugin Install Script"
+echo "========================================"
+echo ""
 
+echo "[1/9] List available plugins..."
+python3 scripts/plugin-manager.py list
+echo ""
+
+echo "[2/9] Preparing .agents/skills directory..."
+mkdir -p .agents/skills
+echo ""
+
+echo "[3/9] Install core plugin..."
+if [ -f "agents/plugins/core.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/core.plugin.json
+fi
+echo ""
+
+echo "[4/9] Install browser-use plugin..."
+if [ -f "agents/plugins/browser-use.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/browser-use.plugin.json
+fi
+echo ""
+
+echo "[5/9] Install frontend-design plugin..."
+if [ -f "agents/plugins/frontend-design.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/frontend-design.plugin.json
+fi
+echo ""
+
+echo "[6/9] Install productivity plugin..."
+if [ -f "agents/plugins/productivity.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/productivity.plugin.json
+fi
+echo ""
+
+echo "[7/9] Install dev-tools plugin..."
+if [ -f "agents/plugins/dev-tools.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/dev-tools.plugin.json
+fi
+echo ""
+
+echo "[8/8] Install superpowers plugin..."
+if [ -f "agents/plugins/superpowers.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/superpowers.plugin.json
+fi
+echo ""
+
+echo "[9/9] Initialize environment and sync to IDEs..."
+python3 scripts/init-env.py -a Generate
 python3 scripts/init-ide.py -i All  -f
+echo ""
+
+echo "========================================"
+echo "  Install Complete!"
+echo "========================================"
+echo ""
+echo "Tip: To install more plugins, run:"
+echo "  python3 scripts/plugin-manager.py install <plugin-file>"
+echo ""
 
 #python3 scripts/init-ide.py -i Agents -f
 #python3 scripts/init-ide.py -i Cursor -f

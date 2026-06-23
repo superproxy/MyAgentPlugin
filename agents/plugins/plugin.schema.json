@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plugin Configuration",
+  "description": "通用插件配置格式，默认远程 skill，优先检查本地缓存",
+  "type": "object",
+  "required": ["name", "version"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "插件唯一标识符"
+    },
+    "version": {
+      "type": "string",
+      "description": "插件版本（语义化版本）"
+    },
+    "description": {
+      "type": "string",
+      "description": "插件功能描述"
+    },
+    "author": {
+      "type": "string",
+      "description": "插件作者"
+    },
+    "scripts": {
+      "type": "object",
+      "description": "插件脚本",
+      "properties": {
+        "install": { "type": "string", "description": "安装脚本" },
+        "init": { "type": "string", "description": "初始化脚本" },
+        "uninstall": { "type": "string", "description": "卸载脚本" }
+      }
+    },
+    "mcpServers": {
+      "type": "object",
+      "description": "MCP 服务器配置",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "command": { "type": "string" },
+          "args": { "type": "array", "items": { "type": "string" } },
+          "type": { "type": "string", "enum": ["http", "streamableHttp"] },
+          "url": { "type": "string" },
+          "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+          "env": { "type": "object", "additionalProperties": { "type": "string" } },
+          "disabled": { "type": ["boolean", "string"] },
+          "startupTimeout": { "type": "integer" }
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "description": "需要安装的技能列表",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "技能名称（本地缓存优先）"
+          },
+          {
+            "type": "object",
+            "required": ["name", "source"],
+            "properties": {
+              "name": { "type": "string", "description": "skill 名称" },
+              "source": { "type": "string", "description": "skill 来源：owner/repo 或 full URL" },
+              "skill": { "type": "string", "description": "skill 名称（如果与 name 不同）" },
+              "url": { "type": "string", "description": "第三方市场 URL（如果不是 GitHub）" },
+              "description": { "type": "string", "description": "skill 描述" }
+            }
+          }
+        ]
+      }
+    },
+    "envVars": {
+      "type": "object",
+      "description": "需要配置的环境变量",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "description": { "type": "string", "description": "环境变量描述" },
+          "default": { "type": "string", "description": "默认值" },
+          "required": { "type": "boolean", "description": "是否必需", "default": false }
+        }
+      }
+    }
+  }
+}

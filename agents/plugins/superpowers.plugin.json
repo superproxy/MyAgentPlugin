@@ -1,0 +1,14 @@
+{
+  "name": "superpowers",
+  "version": "1.0.0",
+  "description": "Superpowers 技能组 - 来自 obra/superpowers 的完整技能集合",
+  "author": "MyAgentPlugin",
+  "mcpServers": {},
+  "skills": [
+    {
+      "name": "superpowers",
+      "source": "obra/superpowers",
+      "description": "Superpowers 完整技能组"
+    }
+  ]
+}

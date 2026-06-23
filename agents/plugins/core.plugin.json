@@ -1,0 +1,26 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "description": "核心插件 - 提供基础的技能发现、初始化、项目管理能力",
+  "author": "MyAgentPlugin",
+  "mcpServers": {},
+  "skills": [
+    "find-skills",
+    "role-skills",
+    "skill-creator",
+    "init-dev-agents",
+    "init-dev-harness-agents",
+    "init-harness-agents",
+    "init-loop-agents",
+    "dispatching-parallel-agents",
+    "subagent-driven-development",
+    "executing-plans",
+    "writing-plans",
+    "finishing-a-development-branch",
+    "using-git-worktrees",
+    "elon-musk-perspective",
+    "using-superpowers",
+    "writing-skills",
+    "openspec-archive-change"
+  ]
+}

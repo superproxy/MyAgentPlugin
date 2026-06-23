@@ -1,0 +1,15 @@
+{
+  "name": "computer-use",
+  "version": "1.0.0",
+  "description": "电脑操作插件 - 提供浏览器自动化和桌面操作能力",
+  "author": "MyAgentPlugin",
+  "mcpServers": {},
+  "skills": [
+    {
+      "name": "open-computer-use",
+      "source": "iFurySt/open-computer-use",
+      "skill": "open-computer-use",
+      "description": "电脑自动化操作"
+    }
+  ]
+}

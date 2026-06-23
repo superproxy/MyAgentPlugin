@@ -123,6 +123,89 @@ agents/
 |------|------|---------|
 | `init-env` | 只刷新密钥相关产物 | 轮换密钥、切换 provider |
 | `install` | 端到端：密钥 + 多 IDE 全量 | 新机器、新成员、大版本升级 |
+| `plugin-manager` | 管理插件安装和技能同步 | 安装新插件、同步技能库 |
+
+### 1.5.8 插件系统（Plugin System）
+
+插件系统用于模块化管理技能库和 MCP 配置，支持本地备份和远程安装两种方式。
+
+#### 目录结构与数据流向
+```
+agents/skills/              → 原始源，备份，不直接修改（提交到 Git）
+  └── {skill-name}/SKILL.md
+.agents/skills/             → 开发环境，可以在这里更新，然后同步到 IDE（不提交）
+agents/plugins/             → 插件配置目录
+  ├── core.plugin.json      → 核心插件（基础技能）
+  ├── frontend-design.plugin.json  → 前端设计插件
+  ├── productivity.plugin.json      → 生产力插件
+  ├── dev-tools.plugin.json         → 开发工具插件
+  └── computer-use.plugin.json      → 电脑操作插件
+```
+
+#### 数据流向
+1. **插件安装**：`agents/skills` → `.agents/skills`（从源复制到开发环境）
+2. **IDE 同步**：`.agents/skills` → `各 IDE 的 skills 目录`
+3. **日常开发**：在 `.agents/skills` 更新，然后运行 `init-ide.py` 同步到 IDE
+
+#### 插件配置格式
+插件配置支持两种 skill 格式，默认都是远程安装，优先检查本地缓存：
+
+```json
+{
+  "name": "plugin-name",
+  "version": "1.0.0",
+  "description": "描述",
+  "mcpServers": {},
+  "skills": [
+    "skill-name",
+    {
+      "name": "skill-name",
+      "source": "owner/repo",
+      "skill": "skill-name",
+      "url": "第三方市场URL（可选）",
+      "description": "描述"
+    }
+  ]
+}
+```
+
+支持三种安装格式：
+1. **直接名称**：`"skill-name"` → `npx skills add skill-name -g`
+2. **owner/repo**：`"owner/repo"` → `npx skills add owner/repo --skill skill-name -g`
+3. **完整URL**：`"https://github.com/owner/repo"` → `npx skills add https://github.com/owner/repo --skill skill-name -g`
+
+安装流程：
+1. 优先检查 `.agents/skills/` 是否已存在该技能，存在则跳过
+2. 检查 `agents/skills/` 缓存，存在则复制到 `.agents/skills/`
+3. 缓存不存在时从远程安装
+
+#### 目录优先级
+```
+agents/skills/              → 源/备份（提交到 Git）
+.agents/skills/             → 开发环境（不提交，优先使用）
+各 IDE 的 skills 目录        → 运行时（从 .agents/skills 同步）
+```
+
+#### 使用方式
+```bash
+# 列出可用插件
+python scripts/plugin-manager.py list
+
+# 安装单个插件
+python scripts/plugin-manager.py install agents/plugins/frontend-design.plugin.json
+
+# 完整安装（含 core 和 computer-use 插件）
+install.cmd  # Windows
+./install.sh  # Linux/Mac
+
+# 日常：在 .agents/skills 更新后同步到 IDE
+python scripts/init-ide.py --ide All --force
+```
+
+#### 设计理念
+- **优先本地**：内置技能全部用 `local` 类型，避免网络问题
+- **开发更新**：`.agents/skills` 作为开发环境，可以更新和调试
+- **IDE 同步**：通过 `init-ide.py` 将最新技能同步到各 IDE
 
 ---
 
