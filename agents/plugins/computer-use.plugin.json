@@ -1,8 +1,11 @@
 {
   "name": "computer-use",
   "version": "1.0.0",
-  "description": "电脑操作插件 - 提供浏览器自动化和桌面操作能力",
+  "description": "电脑操作插件 - 提供桌面操作能力",
   "author": "MyAgentPlugin",
+  "scripts": {
+    "install": "npm i -g open-computer-use"
+  },
   "mcpServers": {},
   "skills": [
     {
