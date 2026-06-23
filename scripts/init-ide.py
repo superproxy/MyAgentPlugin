@@ -762,9 +762,13 @@ def init_trae_cn(target_dir: Path, source_rules_dir: Path, source_mcp_file: Path
     else:
         print(f"{COLOR_YELLOW}[!] Source rules/ not found, skipping{COLOR_RESET}")
 
-    # MCP 配置写到 IDE User 目录
+    # MCP 配置：同时复制到全局目录和 IDE User 目录
     trae_cn_user_mcp = _get_ide_user_dir("Trae CN") / "mcp.json"
     copy_mcp_file_safe(source_mcp_file, trae_cn_user_mcp, "Trae CN User/mcp.json", force)
+
+    # 同时复制到全局目录 ~/.trae-cn/mcp.json（与 rules/skills 同级）
+    trae_cn_global_mcp = trae_cn_global_dir / "mcp.json"
+    copy_mcp_file_safe(source_mcp_file, trae_cn_global_mcp, "~/.trae-cn/mcp.json", force)
 
     copy_skills_safe(source_skills_dir, trae_cn_skills_dir, "~/.trae-cn/skills/", force)
 
@@ -1185,10 +1189,18 @@ def main() -> None:
     else:
         target_dir = Path.home()
 
-    # 优先从 .agents 目录加载，不存在则从 agents 加载
-    source_agents_dir = source_dir / ".agents"
-    if not source_agents_dir.exists():
-        source_agents_dir = source_dir / "agents"
+    # 优先查找包含 mcp.json 的源目录（避免 .agents/ 部分存在导致回退失败）
+    source_agents_candidates = [
+        source_dir / ".agents",
+        source_dir / "agents",
+    ]
+    source_agents_dir = None
+    for candidate in source_agents_candidates:
+        if candidate.exists() and (candidate / "mcp" / "mcp.json").exists():
+            source_agents_dir = candidate
+            break
+    if source_agents_dir is None:
+        source_agents_dir = source_agents_candidates[0]  # 回退到 .agents/
     source_rules_dir = source_agents_dir / "rules"
     source_mcp_file = source_agents_dir / "mcp" / "mcp.json"
     source_skills_dir = source_agents_dir / "skills"
