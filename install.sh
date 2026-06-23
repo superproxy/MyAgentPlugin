@@ -4,51 +4,63 @@ echo "  MyAgentPlugin Install Script"
 echo "========================================"
 echo ""
 
-echo "[1/9] List available plugins..."
+echo "[1/11] List available plugins..."
 python3 scripts/plugin-manager.py list
 echo ""
 
-echo "[2/9] Preparing .agents/skills directory..."
+echo "[2/11] Preparing .agents/skills directory..."
 mkdir -p .agents/skills
 echo ""
 
-echo "[3/9] Install core plugin..."
+echo "[3/11] Install core plugin..."
 if [ -f "agents/plugins/core.plugin.json" ]; then
     python3 scripts/plugin-manager.py install agents/plugins/core.plugin.json
 fi
 echo ""
 
-echo "[4/9] Install browser-use plugin..."
+echo "[4/11] Install computer-use plugin..."
+if [ -f "agents/plugins/computer-use.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/computer-use.plugin.json
+fi
+echo ""
+
+echo "[5/11] Install browser-use plugin..."
 if [ -f "agents/plugins/browser-use.plugin.json" ]; then
     python3 scripts/plugin-manager.py install agents/plugins/browser-use.plugin.json
 fi
 echo ""
 
-echo "[5/9] Install frontend-design plugin..."
+echo "[6/11] Install frontend-design plugin..."
 if [ -f "agents/plugins/frontend-design.plugin.json" ]; then
     python3 scripts/plugin-manager.py install agents/plugins/frontend-design.plugin.json
 fi
 echo ""
 
-echo "[6/9] Install productivity plugin..."
+echo "[7/11] Install productivity plugin..."
 if [ -f "agents/plugins/productivity.plugin.json" ]; then
     python3 scripts/plugin-manager.py install agents/plugins/productivity.plugin.json
 fi
 echo ""
 
-echo "[7/9] Install dev-tools plugin..."
+echo "[8/11] Install dev-tools plugin..."
 if [ -f "agents/plugins/dev-tools.plugin.json" ]; then
     python3 scripts/plugin-manager.py install agents/plugins/dev-tools.plugin.json
 fi
 echo ""
 
-echo "[8/8] Install superpowers plugin..."
+echo "[9/11] Install mattpocock plugin..."
+if [ -f "agents/plugins/mattpocock.plugin.json" ]; then
+    python3 scripts/plugin-manager.py install agents/plugins/mattpocock.plugin.json
+fi
+echo ""
+
+echo "[10/11] Install superpowers plugin..."
 if [ -f "agents/plugins/superpowers.plugin.json" ]; then
     python3 scripts/plugin-manager.py install agents/plugins/superpowers.plugin.json
 fi
 echo ""
 
-echo "[9/9] Initialize environment and sync to IDEs..."
+echo "[11/11] Initialize environment and sync to IDEs..."
 python3 scripts/init-env.py -a Generate
 python3 scripts/init-ide.py -i All  -f
 echo ""

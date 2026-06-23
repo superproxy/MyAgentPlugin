@@ -1,0 +1,14 @@
+{
+  "name": "mattpocock",
+  "version": "1.0.0",
+  "description": "Matt Pocock 技能组 - 来自 mattpocock/mattpocock 的完整技能集合",
+  "author": "mattpocock",
+  "mcpServers": {},
+  "skills": [
+    {
+      "name": "mattpocock",
+      "source": "mattpocock/skills",
+      "description": "Matt Pocock 完整技能组"
+    }
+  ]
+}

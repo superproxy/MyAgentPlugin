@@ -5,58 +5,64 @@ echo   MyAgentPlugin Install Script
 echo ========================================
 echo.
 
-echo [1/10] List available plugins...
+echo [1/11] List available plugins...
 python scripts\plugin-manager.py list
 echo.
 
-echo [2/10] Preparing .agents/skills directory...
+echo [2/11] Preparing .agents/skills directory...
 if not exist ".agents" mkdir ".agents"
 if not exist ".agents\skills" mkdir ".agents\skills"
 echo.
 
-echo [3/10] Install core plugin...
+echo [3/11] Install core plugin...
 if exist "agents\plugins\core.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\core.plugin.json
 )
 echo.
 
-echo [4/10] Install computer-use plugin...
+echo [4/11] Install computer-use plugin...
 if exist "agents\plugins\computer-use.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\computer-use.plugin.json
 )
 echo.
 
-echo [5/10] Install browser-use plugin...
+echo [5/11] Install browser-use plugin...
 if exist "agents\plugins\browser-use.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\browser-use.plugin.json
 )
 echo.
 
-echo [6/10] Install frontend-design plugin...
+echo [6/11] Install frontend-design plugin...
 if exist "agents\plugins\frontend-design.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\frontend-design.plugin.json
 )
 echo.
 
-echo [7/10] Install productivity plugin...
+echo [7/11] Install productivity plugin...
 if exist "agents\plugins\productivity.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\productivity.plugin.json
 )
 echo.
 
-echo [8/10] Install dev-tools plugin...
+echo [8/11] Install dev-tools plugin...
 if exist "agents\plugins\dev-tools.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\dev-tools.plugin.json
 )
 echo.
 
-echo [9/10] Install superpowers plugin...
+echo [9/11] Install mattpocock plugin...
+if exist "agents\plugins\mattpocock.plugin.json" (
+    python scripts\plugin-manager.py install agents\plugins\mattpocock.plugin.json
+)
+echo.
+
+echo [10/11] Install superpowers plugin...
 if exist "agents\plugins\superpowers.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\superpowers.plugin.json
 )
 echo.
 
-echo [10/10] Initialize environment and sync to IDEs...
+echo [11/11] Initialize environment and sync to IDEs...
 python scripts\init-env.py -a Generate
 python scripts\init-ide.py -i All -f
 echo.

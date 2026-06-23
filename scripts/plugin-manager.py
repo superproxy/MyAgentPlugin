@@ -26,7 +26,7 @@ def load_plugin_config(plugin_path: Path) -> dict:
     if not plugin_path.exists():
         print(f"{COLOR_RED}[!] 插件文件不存在: {plugin_path}{COLOR_RESET}", file=sys.stderr)
         sys.exit(1)
-    
+
     with open(plugin_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -45,14 +45,14 @@ def update_env_file(env_path: Path, plugin_config: dict) -> None:
     """更新环境变量文件"""
     if "envVars" not in plugin_config:
         return
-    
+
     if not env_path.exists():
         print(f"{COLOR_YELLOW}[!] 环境变量文件不存在，创建新文件: {env_path}{COLOR_RESET}")
         env_config = {}
     else:
         with open(env_path, "r", encoding="utf-8-sig") as f:
             env_config = json.load(f)
-    
+
     # 更新环境变量
     updated = False
     for var_name, var_info in plugin_config["envVars"].items():
@@ -64,7 +64,7 @@ def update_env_file(env_path: Path, plugin_config: dict) -> None:
             updated = True
         else:
             print(f"{COLOR_DARKGRAY}[~] 环境变量已存在: {var_name}{COLOR_RESET}")
-    
+
     if updated:
         env_path.parent.mkdir(parents=True, exist_ok=True)
         with open(env_path, "w", encoding="utf-8") as f:
@@ -76,18 +76,18 @@ def update_mcp_template(mcp_template_path: Path, plugin_config: dict) -> None:
     """更新MCP配置模板"""
     if "mcpServers" not in plugin_config:
         return
-    
+
     if not mcp_template_path.exists():
         print(f"{COLOR_YELLOW}[!] MCP模板文件不存在，创建新文件: {mcp_template_path}{COLOR_RESET}")
         mcp_config = {"mcpServers": {}}
     else:
         with open(mcp_template_path, "r", encoding="utf-8") as f:
             mcp_config = json.load(f)
-    
+
     # 确保有mcpServers字段
     if "mcpServers" not in mcp_config:
         mcp_config["mcpServers"] = {}
-    
+
     # 更新MCP服务器配置
     updated = False
     for server_name, server_config in plugin_config["mcpServers"].items():
@@ -97,7 +97,7 @@ def update_mcp_template(mcp_template_path: Path, plugin_config: dict) -> None:
             updated = True
         else:
             print(f"{COLOR_DARKGRAY}[~] MCP服务器已存在: {server_name}{COLOR_RESET}")
-    
+
     if updated:
         mcp_template_path.parent.mkdir(parents=True, exist_ok=True)
         with open(mcp_template_path, "w", encoding="utf-8") as f:
@@ -108,22 +108,26 @@ def update_mcp_template(mcp_template_path: Path, plugin_config: dict) -> None:
 def build_install_command(skill_config: dict or str) -> tuple[str, str]:
     """构建安装命令，返回 (skill_name, install_command)"""
     skill_name = ""
-    
+
     if isinstance(skill_config, dict):
         # 新格式：对象格式
-        skill_name = skill_config.get("skill", skill_config.get("name", ""))
+        explicit_skill = skill_config.get("skill", "")
+        skill_name = explicit_skill or skill_config.get("name", "")
         source = skill_config.get("source", "")
         url = skill_config.get("url", "")
-        
+
         if url:
             # 第三方市场 URL
-            install_command = f"npx --yes skills add {url} --skill {skill_name} -y"
+            install_command = f"npx skills add {url} --skill {skill_name} -y"
         elif source:
-            # 普通格式
-            install_command = f"npx --yes skills add {source} --skill {skill_name} -y"
+            # 有 source：如果显式指定了 skill 字段则安装单个，否则安装整个集合
+            if explicit_skill:
+                install_command = f"npx skills add {source} --skill {explicit_skill} -y"
+            else:
+                install_command = f"npx skills add {source} -y"
         else:
             # 只有 skill name 的情况
-            install_command = f"npx --yes skills add {skill_name} -y"
+            install_command = f"npx skills add {skill_name} -y"
     elif isinstance(skill_config, str):
         # 字符串格式：可能是命令或名称
         if skill_config.startswith("npx"):
@@ -146,29 +150,29 @@ def build_install_command(skill_config: dict or str) -> tuple[str, str]:
     else:
         skill_name = str(skill_config)
         install_command = f"npx skills add {skill_name} -y"
-    
+
     return skill_name, install_command
 
 
 def install_skill(skill_config: dict or str, source_dir: Path = None) -> None:
     """安装技能：优先检查本地缓存"""
     skill_name, install_command = build_install_command(skill_config)
-    
+
     if not skill_name and source_dir:
         print(f"{COLOR_YELLOW}[!] Could not determine skill name, skipping{COLOR_RESET}")
         return
-    
+
     if source_dir:
         dot_agents_skills_dir = source_dir / ".agents" / "skills"
         dot_agents_skills_dir.mkdir(parents=True, exist_ok=True)
-        
+
         target_skill_dir = dot_agents_skills_dir / skill_name
-        
+
         # 如果 .agents/skills 中已有该技能，就跳过更新
         if target_skill_dir.exists():
             print(f"{COLOR_DARKGRAY}[-] Skill already exists in .agents/skills: {skill_name}, skipping update{COLOR_RESET}")
             return
-        
+
         # 检查 agents/skills 缓存
         cache_skill_dir = source_dir / "agents" / "skills" / skill_name
         if cache_skill_dir.exists():
@@ -180,10 +184,10 @@ def install_skill(skill_config: dict or str, source_dir: Path = None) -> None:
                 return
             except Exception as e:
                 print(f"{COLOR_YELLOW}[!] Cache copy failed, will download from remote: {e}{COLOR_RESET}")
-    
+
     # 从远程安装
     print(f"{COLOR_MAGENTA}[-] Installing skill: {install_command}{COLOR_RESET}")
-    
+
     try:
         result = subprocess.run(
             install_command,
@@ -206,9 +210,9 @@ def run_plugin_scripts(plugin_config: dict) -> None:
     """执行插件脚本"""
     if "scripts" not in plugin_config:
         return
-    
+
     scripts = plugin_config["scripts"]
-    
+
     # 执行 install 脚本
     if "install" in scripts:
         install_cmd = scripts["install"]
@@ -238,9 +242,9 @@ def install_skills(plugin_config: dict, source_dir: Path) -> None:
     """安装插件所需技能"""
     if "skills" not in plugin_config:
         return
-    
+
     skills = plugin_config["skills"]
-    
+
     for skill in skills:
         install_skill(skill, source_dir)
 
@@ -256,35 +260,35 @@ def install_plugin(
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
     print(f"{COLOR_CYAN}  插件安装{COLOR_RESET}")
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
-    
+
     # 加载和验证插件配置
     plugin_config = load_plugin_config(plugin_path)
     if not validate_plugin_config(plugin_config):
         sys.exit(1)
-    
+
     # 显示插件信息
     print(f"\n{COLOR_WHITE}插件名称: {plugin_config.get('name', '')}{COLOR_RESET}")
     print(f"{COLOR_WHITE}版本: {plugin_config.get('version', '')}{COLOR_RESET}")
     print(f"{COLOR_WHITE}描述: {plugin_config.get('description', '')}{COLOR_RESET}")
     print(f"{COLOR_WHITE}作者: {plugin_config.get('author', '')}{COLOR_RESET}")
-    
+
     if dry_run:
         print(f"\n{COLOR_YELLOW}[!] 这是模拟运行，不进行实际修改{COLOR_RESET}")
         return
-    
+
     # 执行安装步骤
     print(f"\n{COLOR_MAGENTA}步骤 1/4: 更新环境变量{COLOR_RESET}")
     update_env_file(env_path, plugin_config)
-    
+
     print(f"\n{COLOR_MAGENTA}步骤 2/4: 更新MCP配置{COLOR_RESET}")
     update_mcp_template(mcp_template_path, plugin_config)
-    
+
     print(f"\n{COLOR_MAGENTA}步骤 3/4: 执行插件脚本{COLOR_RESET}")
     run_plugin_scripts(plugin_config)
-    
+
     print(f"\n{COLOR_MAGENTA}步骤 4/4: 安装技能{COLOR_RESET}")
     install_skills(plugin_config, source_dir)
-    
+
     print(f"\n{COLOR_GREEN}{'=' * 40}{COLOR_RESET}")
     print(f"{COLOR_GREEN}  插件安装完成！{COLOR_RESET}")
     print(f"{COLOR_GREEN}{'=' * 40}{COLOR_RESET}")
@@ -298,11 +302,11 @@ def list_plugins(plugins_dir: Path) -> None:
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
     print(f"{COLOR_CYAN}  可用插件列表{COLOR_RESET}")
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
-    
+
     if not plugins_dir.exists():
         print(f"{COLOR_YELLOW}[!] 插件目录不存在: {plugins_dir}{COLOR_RESET}")
         return
-    
+
     # 查找插件文件
     plugin_files = []
     for file in plugins_dir.iterdir():
@@ -314,11 +318,11 @@ def list_plugins(plugins_dir: Path) -> None:
                         plugin_files.append((file, config))
             except:
                 continue
-    
+
     if not plugin_files:
         print(f"{COLOR_YELLOW}[!] 没有找到有效的插件{COLOR_RESET}")
         return
-    
+
     print(f"\n找到 {len(plugin_files)} 个插件:\n")
     for i, (file, config) in enumerate(plugin_files, 1):
         print(f"{COLOR_WHITE}{i}. {config.get('name', file.stem)}{COLOR_RESET}")
@@ -333,7 +337,7 @@ def main() -> None:
         description="插件管理器 - 安装和管理通用格式的插件"
     )
     subparsers = parser.add_subparsers(title="命令", dest="command")
-    
+
     # install 命令
     install_parser = subparsers.add_parser("install", help="安装插件")
     install_parser.add_argument(
@@ -360,7 +364,7 @@ def main() -> None:
         default="",
         help="源目录路径 (默认: 当前目录)"
     )
-    
+
     # list 命令
     list_parser = subparsers.add_parser("list", help="列出可用插件")
     list_parser.add_argument(
@@ -373,16 +377,16 @@ def main() -> None:
         default="",
         help="源目录路径 (默认: 当前目录)"
     )
-    
+
     args = parser.parse_args()
-    
+
     # 确定源目录
     if args.source_dir:
         source_dir = Path(args.source_dir).resolve()
     else:
         script_dir = Path(__file__).resolve().parent
         source_dir = script_dir.parent.resolve()
-    
+
     if args.command == "install":
         plugin_path = Path(args.plugin).resolve()
         env_path = source_dir / args.env_file
@@ -407,19 +411,19 @@ def load_skills_mapping(csv_path: Path) -> list[dict]:
     if not csv_path.exists():
         print(f"{COLOR_YELLOW}[!] 技能映射文件不存在: {csv_path}{COLOR_RESET}")
         return skills
-    
+
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             skills.append(row)
-    
+
     return skills
 
 
 def generate_plugin_from_csv(
-    csv_path: Path, 
-    output_path: Path, 
-    plugin_name: str, 
+    csv_path: Path,
+    output_path: Path,
+    plugin_name: str,
     plugin_description: str,
     category_filter: str = None
 ) -> None:
@@ -428,18 +432,18 @@ def generate_plugin_from_csv(
     if not skills:
         print(f"{COLOR_RED}[!] 没有找到技能数据{COLOR_RESET}")
         return
-    
+
     plugin_skills = []
     for skill in skills:
         # 如果指定了分类过滤
         if category_filter and skill.get("category") != category_filter:
             continue
-        
+
         skill_name = skill.get("skill_name")
         source_type = skill.get("source_type", "local")
         source = skill.get("source", skill_name)
         description = skill.get("description", "")
-        
+
         if source_type == "local":
             plugin_skills.append({
                 "name": skill_name,
@@ -450,7 +454,7 @@ def generate_plugin_from_csv(
         else:
             # 构建完整的远程安装命令
             plugin_skills.append(f"npx skills add {source} --skill {skill_name} -y")
-    
+
     plugin_config = {
         "name": plugin_name,
         "version": "1.0.0",
@@ -459,11 +463,11 @@ def generate_plugin_from_csv(
         "mcpServers": {},
         "skills": plugin_skills
     }
-    
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(plugin_config, f, indent=2, ensure_ascii=False)
-    
+
     print(f"{COLOR_GREEN}[OK] 插件已生成: {output_path}{COLOR_RESET}")
     print(f"   包含 {len(plugin_skills)} 个技能")
 
@@ -473,11 +477,11 @@ def list_skills_from_csv(csv_path: Path) -> None:
     skills = load_skills_mapping(csv_path)
     if not skills:
         return
-    
+
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
     print(f"{COLOR_CYAN}  技能列表{COLOR_RESET}")
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
-    
+
     # 按分类分组
     categories = {}
     for skill in skills:
@@ -485,7 +489,7 @@ def list_skills_from_csv(csv_path: Path) -> None:
         if category not in categories:
             categories[category] = []
         categories[category].append(skill)
-    
+
     for category in sorted(categories.keys()):
         print(f"\n{COLOR_WHITE}## {category}{COLOR_RESET}")
         for skill in categories[category]:
@@ -499,7 +503,7 @@ def main() -> None:
         description="插件管理器 - 安装和管理通用格式的插件"
     )
     subparsers = parser.add_subparsers(title="命令", dest="command")
-    
+
     # install 命令
     install_parser = subparsers.add_parser("install", help="安装插件")
     install_parser.add_argument(
@@ -526,7 +530,7 @@ def main() -> None:
         default="",
         help="源目录路径 (默认: 当前目录)"
     )
-    
+
     # list 命令
     list_parser = subparsers.add_parser("list", help="列出可用插件")
     list_parser.add_argument(
@@ -539,7 +543,7 @@ def main() -> None:
         default="",
         help="源目录路径 (默认: 当前目录)"
     )
-    
+
     # list-skills 命令
     list_skills_parser = subparsers.add_parser("list-skills", help="从 skills-mapping.csv 列出所有技能")
     list_skills_parser.add_argument(
@@ -552,7 +556,7 @@ def main() -> None:
         default="",
         help="源目录路径 (默认: 当前目录)"
     )
-    
+
     # generate-plugin 命令
     generate_plugin_parser = subparsers.add_parser("generate-plugin", help="根据 skills-mapping.csv 生成插件")
     generate_plugin_parser.add_argument(
@@ -584,16 +588,16 @@ def main() -> None:
         default="",
         help="源目录路径 (默认: 当前目录)"
     )
-    
+
     args = parser.parse_args()
-    
+
     # 确定源目录
     if args.source_dir:
         source_dir = Path(args.source_dir).resolve()
     else:
         script_dir = Path(__file__).resolve().parent
         source_dir = script_dir.parent.resolve()
-    
+
     if args.command == "install":
         plugin_path = Path(args.plugin).resolve()
         env_path = source_dir / args.env_file
