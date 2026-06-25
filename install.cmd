@@ -38,6 +38,12 @@ if exist "agents\plugins\frontend-design.plugin.json" (
 )
 echo.
 
+echo "[6/11] Install enhance-dev-design plugin..."
+if [ -f "agents/plugins/enhance-dev.json" ]; then
+    python3 scripts/plugin-manager.py install agents\plugins\enhance-dev.json
+fi
+echo.
+
 echo [7/11] Install productivity plugin...
 if exist "agents\plugins\productivity.plugin.json" (
     python scripts\plugin-manager.py install agents\plugins\productivity.plugin.json

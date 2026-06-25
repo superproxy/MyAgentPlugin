@@ -1,4 +1,0 @@
-interface:
-  display_name: "硬件智能体提示词"
-  short_description: "为硬件 AI 智能体生成可落地提示词与角色约束"
-  default_prompt: "Use $hardware-agent-prompt-skill to research with MCP and draft a hardware agent prompt for my device."

@@ -227,7 +227,7 @@
         "undoom-douyin-data-analysis",
         "undoom-douyin-mcp"
       ],
-      "disabled": "true"
+      "disabled": true
     },
     "open-computer-use": {
       "command": "open-computer-use",
