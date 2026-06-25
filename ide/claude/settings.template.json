@@ -2,10 +2,15 @@
   "env": {
     "ANTHROPIC_BASE_URL": "${ANTHROPIC_BASE_URL}",
     "ANTHROPIC_AUTH_TOKEN": "${ANTHROPIC_AUTH_TOKEN}",
-    "ANTHROPIC_MODEL": "${ANTHROPIC_MODEL:-anthropic/claude-sonnet-4.6}",
+    "ANTHROPIC_MODEL": "${ANTHROPIC_MODEL}",
+    
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0"
   },
+  "alwaysThinkingEnabled": true,
+  "effortLevel": "medium",
+  "language": "中文",
+
   "permissions": {
     "allow": [
       "Bash(git *)",
@@ -57,7 +62,5 @@
       "Bash(mkfs *)",
       "Bash(format *)"
     ]
-  },
-  "language": "中文",
-  "model": "opus"
+  }
 }
