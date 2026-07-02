@@ -10,10 +10,11 @@
 ## 1. 快速开始
 
 ```bash
-# 1) 复制密钥模板
-cp env.example.yaml env.yaml
+# 1) 复制密钥模板（拆分为两个文件）
+cp llm-env-example.yaml llm.yaml
+cp mcp-env-example.yaml mcp.yaml
 
-# 2) 编辑 env.yaml，填入真实 API Key（也可留空，由 OS 环境变量回退）
+# 2) 编辑 llm.yaml / mcp.yaml，填入真实 API Key（也可留空，由 OS 环境变量回退）
 
 # 3) 一键全量初始化（生成配置 + 链接所有支持的 IDE）
 .\install.cmd      # Windows
@@ -28,7 +29,7 @@ cp env.example.yaml env.yaml
 
 | 脚本 | 用途 |
 |------|------|
-| [scripts/init-env.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-env.py) | 从 `env.yaml` / OS 环境变量生成 MCP / Codex / OpenCode 配置 |
+| [scripts/init-env.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-env.py) | 从 `llm.yaml` + `mcp.yaml` / OS 环境变量生成 MCP / Codex / OpenCode 配置 |
 | [scripts/init-ide.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-ide.py) | 通用 IDE 初始化（创建 Junction、复制 / 生成配置） |
 | `init-env.cmd` / `init-env.sh` | 一键生成密钥相关配置 |
 | `install.cmd` / `install.sh` | 一键执行环境初始化 + 多 IDE 初始化 |
@@ -77,14 +78,14 @@ python scripts/init-env.py --provider volcengine --protocol anthropic
 python scripts/init-env.py --provider deepseek -a Generate
 ```
 
-支持的 provider 来自 `env.yaml` 中 `llm.*` 节点（默认包含 `openicu` / `openai` / `openrouter` / `deepseek` / `volcengine`）。
+支持的 provider 来自 `llm.yaml` 中 `llm.*` 节点（默认包含 `openicu` / `openai` / `openrouter` / `deepseek` / `volcengine`）。
 
 ### 3.3 参数速查
 
 | 参数 | 简写 | 说明 | 默认值 |
 |------|------|------|--------|
 | `--action` | `-a` | `Env` / `Generate` / `All` / `ExportShell` | `All` |
-| `--env-file` | `-f` | 密钥配置文件路径 | `env.yaml` |
+| `--env-file` | `-f` | LLM 配置文件路径（mcp.yaml 自动从同目录加载） | `llm.yaml` |
 | `--template-file` | — | MCP 模板路径 | `agents/mcp/mcp.template.json` |
 | `--output-file` | — | MCP 生成路径 | `agents/mcp/mcp.json` |
 | `--scope` | — | `process` / `user` | `process` |
@@ -109,7 +110,7 @@ python scripts/init-env.py --provider deepseek -a Generate
 |--------|------|------|
 | `${LLM_ACTIVE_BASE_URL}` / `${LLM_ACTIVE_API_KEY}` | 当前 active provider 的扁平字段 | Codex / Claude 类 IDE |
 | `${LLM_ACTIVE_OPENAI_*}` / `${LLM_ACTIVE_ANTHROPIC_*}` | active provider 的指定协议字段 | 需要明确协议时 |
-| `${LLM_<PROVIDER>_<PROTOCOL>_<FIELD>}` | env.yaml 中**任意 provider** 的字段 | OpenCode（多 provider 并存） |
+| `${LLM_<PROVIDER>_<PROTOCOL>_<FIELD>}` | llm.yaml 中**任意 provider** 的字段 | OpenCode（多 provider 并存） |
 | `${OPENAI_API_KEY}` / `${ANTHROPIC_*}` | 兼容性标准化键（来自 active provider） | 历史模板 |
 
 ### 3.6 模型配置说明
@@ -176,7 +177,7 @@ python scripts/init-env.py --provider deepseek -a Generate
 
 #### 新增模型
 
-在 `env.yaml` 对应 provider/protocol 的 `models` 中添加条目即可：
+在 `llm.yaml` 对应 provider/protocol 的 `models` 中添加条目即可：
 
 ```json
 "models": {
@@ -305,8 +306,9 @@ python scripts/init-ide.py --source-dir D:\my-project
 ```bash
 git clone <repo>
 cd agent-init-plugin
-cp env.example.yaml env.yaml
-# 编辑 env.yaml 填密钥
+cp llm-env-example.yaml llm.yaml
+cp mcp-env-example.yaml mcp.yaml
+# 编辑 llm.yaml / mcp.yaml 填密钥
 .\install.cmd
 ```
 
@@ -337,7 +339,7 @@ python scripts/init-env.py -a Env --scope user --force
 
 ### 场景 F：在 OpenCode 里新增一个 LLM provider
 
-1. 在 `env.yaml` 的 `llm` 下加一节：
+1. 在 `llm.yaml` 的 `llm` 下加一节：
    ```json
    "groq": { "openai": { "base_url": "https://api.groq.com/openai/v1", "api_key": "..." } }
    ```
@@ -350,8 +352,8 @@ python scripts/init-env.py -a Env --scope user --force
 
 | 文件 | 提交？ | 说明 |
 |------|--------|------|
-| `env.example.yaml` | ✅ | 仅占位 |
-| `env.yaml` | ❌ | 含真实密钥（已在 `.gitignore`） |
+| `llm-env-example.yaml` / `mcp-env-example.yaml` | ✅ | 仅占位 |
+| `llm.yaml` / `mcp.yaml` | ❌ | 含真实密钥（已在 `.gitignore`） |
 | `*.template.json` / `*.template.toml` | ✅ | 仅 `${KEY}` 占位符 |
 | `agents/mcp/mcp.json` | ❌ | 由脚本生成 |
 | `ide/codex/auth.json` | ❌ | 由脚本生成 |
@@ -390,9 +392,9 @@ python scripts/init-env.py -a Env --scope user --force
 
 ### Q1：`[WARN] Unresolved placeholders ...`？
 
-`env.yaml` 中对应键值为空，且 OS 环境变量也未设置。三种解决方式：
+`llm.yaml` / `mcp.yaml` 中对应键值为空，且 OS 环境变量也未设置。三种解决方式：
 
-1. 在 `env.yaml` 填入真实值；
+1. 在 `llm.yaml` / `mcp.yaml` 填入真实值；
 2. `setx OPENAI_API_KEY xxx`（Windows） / `export OPENAI_API_KEY=xxx`（*nix）后重跑；
 3. 若该占位符不需要，确认它是否在 `provider.*` / `mcpServers.*` 容器键下——是的话脚本会**自动移除**该子项；不是的话从模板里删掉。
 
@@ -423,6 +425,6 @@ python scripts/init-env.py --provider <provider_name> -a Generate
 ### Q7：OpenCode 里看不到我新加的 provider？
 
 OpenCode 是从 `opencode.json` 的 `provider` 段读取的。新加 provider 需要：
-1. `env.yaml` 加节点
+1. `llm.yaml` 加节点
 2. `opencode.template.json` 加引用
 3. 重新生成

@@ -50,27 +50,27 @@ agents/
 
 ```
 模板（提交，无密钥）   →  本地密钥（不提交）   →  运行态产物（不提交，由脚本生成）
-*.template.json/toml      env.yaml                mcp.json / auth.json / config.toml / opencode.json
+*.template.json/toml      llm.yaml + mcp.yaml      mcp.json / auth.json / config.toml / opencode.json
 ```
 
 - **模板层**：列出占位符 `${KEY}`，可以安全提交，作为"团队共识结构"。
-- **密钥层**：`env.yaml` 由开发者本地填写，**绝不提交**。
+- **密钥层**：`llm.yaml` + `mcp.yaml` 由开发者本地填写，**绝不提交**。
 - **运行态产物**：由 [scripts/init-env.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-env.py) 在本地组合两者后生成；**绝不提交**。
 
 这样模板可以演化（新增 provider / MCP 服务）而不需要每次改密钥；密钥可以轮换而不影响共享结构。
 
 ### 1.5.3 LLM Provider 双轨
 
-不同 IDE 的 LLM 加载语义不同，本仓库用 `env.yaml` 同一份数据，按需扁平化为不同形态的环境变量：
+不同 IDE 的 LLM 加载语义不同，本仓库用 `llm.yaml` + `mcp.yaml` 两份数据，按需扁平化为不同形态的环境变量：
 
 | IDE | 语义 | 占位符前缀 | 切换方式 |
 |-----|------|-----------|---------|
-| **Codex / Claude** | 一次只用一个 active provider | `${LLM_ACTIVE_*}` / `${OPENAI_API_KEY}` | 改 `env.yaml._active_provider` |
-| **OpenCode** | 多 provider 并存，UI 内选择 | `${LLM_<PROVIDER>_<PROTOCOL>_*}` | 在 `env.yaml.llm` 中维护 |
+| **Codex / Claude** | 一次只用一个 active provider | `${LLM_ACTIVE_*}` / `${OPENAI_API_KEY}` | 改 `llm.yaml._active_provider` |
+| **OpenCode** | 多 provider 并存，UI 内选择 | `${LLM_<PROVIDER>_<PROTOCOL>_*}` | 在 `llm.yaml.llm` 中维护 |
 
 **设计意图**：
 
-- 用户填一份 `env.yaml` 同时满足多个 IDE，不需要为每个 IDE 各自维护一份密钥
+- 用户填一份 `llm.yaml` + `mcp.yaml` 同时满足多个 IDE，不需要为每个 IDE 各自维护一份密钥
 - 切换 active provider 只需一条命令，Codex 的 base_url / api_key 自动跟随
 - OpenCode 列出哪些 provider 由模板文件决定，与具体密钥解耦
 
@@ -93,7 +93,7 @@ agents/
 |------|------|------|
 | `${LLM_ACTIVE_<FIELD>}` | 当前 active provider 的扁平字段 | 通用引用 |
 | `${LLM_ACTIVE_<PROTOCOL>_<FIELD>}` | active provider 的指定协议字段 | 区分 OpenAI / Anthropic 协议 |
-| `${LLM_<PROVIDER>_<PROTOCOL>_<FIELD>}` | env.yaml 中**任意 provider** 的字段 | 多 provider 并存 |
+| `${LLM_<PROVIDER>_<PROTOCOL>_<FIELD>}` | llm.yaml 中**任意 provider** 的字段 | 多 provider 并存 |
 | `${OPENAI_API_KEY}` / `${ANTHROPIC_*}` | 兼容性标准化键 | 历史代码、第三方 SDK |
 
 新增占位符时优先沿用现有命名约定，不引入第四种风格。

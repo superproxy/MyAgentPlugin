@@ -3,8 +3,11 @@ agents/mcp/mcp.json
 
 # MCP 运行时配置（由 init-mcp-env 脚本从模板生成，包含真实密钥）
 agents/mcp/mcp.json
-env.yaml
 env.local.yaml
+# 拆分后的密钥配置文件（包含真实 API Key，禁止提交）
+llm.yaml
+mcp.yaml
+# 注意：llm-env-example.yaml 和 mcp-env-example.yaml 是模板文件，可以安全提交
 
 opencode.json
 

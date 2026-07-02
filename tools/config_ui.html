@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>MyAgentPlugin 配置工具</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        brand: { 50:'#eef4ff',100:'#d9e6ff',500:'#165dff',600:'#0e42d2',700:'#0a2e9c' },
+        ink: { 900:'#1f2329',700:'#4e5969',500:'#86909c',300:'#c9cdd4',100:'#f7f8fa' }
+      },
+      boxShadow: {
+        'card': '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)',
+        'glow': '0 0 0 3px rgba(22,93,255,0.15)'
+      }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  [v-cloak] { display: none; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #c9cdd4; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #86909c; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+  .fade-enter-from, .fade-leave-to { opacity: 0; }
+  .log-panel { font-family: "JetBrains Mono", Consolas, monospace; }
+  input, select, textarea { transition: all 0.15s; }
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(22,93,255,0.15); border-color: #165dff; }
+  .gradient-bg { background: linear-gradient(135deg, #1f2329 0%, #2a2f36 100%); }
+  .glass { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+</style>
+</head>
+<body class="bg-ink-100 text-ink-900 text-sm">
+<div id="app" v-cloak>
+  <!-- Header -->
+  <header class="gradient-bg text-white shadow-lg sticky top-0 z-30">
+    <div class="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center font-bold text-lg shadow-md">M</div>
+        <div>
+          <h1 class="text-base font-semibold">MyAgentPlugin 配置工具</h1>
+          <div class="text-xs text-white/60" v-html="metaInfo"></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="https://www.modelscope.cn/mcp" target="_blank" class="text-xs px-3 py-1.5 rounded-md glass hover:bg-white/20 transition">MCP 市场</a>
+        <a href="https://www.modelscope.cn/skills" target="_blank" class="text-xs px-3 py-1.5 rounded-md glass hover:bg-white/20 transition">Skills 市场</a>
+        <a href="https://skills.sh" target="_blank" class="text-xs px-3 py-1.5 rounded-md glass hover:bg-white/20 transition">skills.sh</a>
+      </div>
+    </div>
+    <!-- Nav -->
+    <nav class="max-w-[1600px] mx-auto px-6 flex gap-1">
+      <button v-for="t in tabs" :key="t.key" @click="tab = t.key"
+        :class="['px-5 py-2.5 text-sm font-medium border-b-2 transition',
+                 tab === t.key ? 'border-white text-white' : 'border-transparent text-white/60 hover:text-white/90']">
+        {{ t.label }}
+      </button>
+    </nav>
+  </header>
+
+  <main class="max-w-[1600px] mx-auto px-6 py-5">
+
+    <!-- ===================== LLM Provider 配置 (llm.yaml) ===================== -->
+    <div v-show="tab === 'env'" class="space-y-4">
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+          <h2 class="text-sm font-semibold flex items-center gap-2">
+            <span class="w-1 h-4 bg-brand-500 rounded"></span>LLM Providers
+            <span class="text-[10px] text-ink-500 font-normal">llm.yaml</span>
+          </h2>
+          <div class="flex gap-2">
+            <button @click="addProvider" class="px-3 py-1.5 text-xs bg-brand-50 text-brand-600 rounded-md hover:bg-brand-100 font-medium">+ 添加 Provider</button>
+            <button @click="saveEnv" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600 font-medium">保存 llm.yaml</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-ink-500 w-32">Active Provider</label>
+            <select v-model="envData.llm._active_provider" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded-md">
+              <option v-for="p in providerNames" :key="p" :value="p">{{ p }}</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-ink-500 w-32">Active Protocol</label>
+            <input v-model="envData.llm._active_protocol" placeholder="openai|anthropic" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded-md">
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div v-for="pn in providerNames" :key="pn"
+               class="border border-ink-300 rounded-lg overflow-hidden hover:border-brand-500 transition">
+            <div @click="toggleProvider(pn)"
+                 class="px-3 py-2 bg-ink-100 flex items-center justify-between cursor-pointer hover:bg-gray-200/60">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-ink-500">{{ openedProviders.has(pn) ? '▼' : '▶' }}</span>
+                <span class="font-medium text-sm">{{ pn }}</span>
+                <span v-if="envData.llm._active_provider === pn" class="px-1.5 py-0.5 text-[10px] bg-brand-50 text-brand-600 rounded">active</span>
+              </div>
+              <div class="flex gap-1">
+                <button @click.stop="setActiveProvider(pn)" class="px-2 py-1 text-[11px] text-brand-600 hover:bg-brand-50 rounded">设为 Active</button>
+                <button @click.stop="deleteProvider(pn)" class="px-2 py-1 text-[11px] text-red-500 hover:bg-red-50 rounded">删除</button>
+              </div>
+            </div>
+            <div v-show="openedProviders.has(pn)" class="p-3 space-y-3">
+              <div v-for="(pc, proto) in envData.llm[pn]" :key="proto"
+                   v-if="typeof pc === 'object' && pc !== null"
+                   class="bg-gray-50 border border-gray-200 rounded-md p-3">
+                <div class="flex justify-between items-center mb-2">
+                  <h4 class="text-[11px] font-semibold text-ink-700 uppercase">{{ proto }}</h4>
+                  <button @click="deleteProtocol(pn, proto)" class="px-2 py-1 text-[11px] text-red-500 hover:bg-red-50 rounded">删除协议</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mb-2">
+                  <div class="flex items-center gap-2">
+                    <label class="text-[11px] text-ink-500 w-16">base_url</label>
+                    <input v-model="pc.base_url" class="flex-1 px-2 py-1 text-xs border border-ink-300 rounded">
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="text-[11px] text-ink-500 w-16">api_key</label>
+                    <input type="password" v-model="pc.api_key" class="flex-1 px-2 py-1 text-xs border border-ink-300 rounded">
+                  </div>
+                </div>
+                <table class="w-full text-xs border-collapse">
+                  <thead><tr class="bg-ink-100"><th class="border border-ink-300 px-2 py-1 text-left">key</th><th class="border border-ink-300 px-2 py-1 text-left">name</th><th class="border border-ink-300 px-2 py-1 w-12"></th></tr></thead>
+                  <tbody>
+                    <tr v-for="(mv, mk) in (pc.models || {})" :key="mk">
+                      <td class="border border-ink-300"><input :value="mk" @change="renameModel(pn, proto, mk, $event.target.value)" class="w-full px-2 py-1 border-0"></td>
+                      <td class="border border-ink-300"><input v-model="mv.name" class="w-full px-2 py-1 border-0"></td>
+                      <td class="border border-ink-300 text-center"><button @click="deleteModel(pn, proto, mk)" class="text-red-500 text-[11px]">删</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <button @click="addModel(pn, proto)" class="mt-1.5 text-[11px] text-brand-600 hover:underline">+ 添加 model</button>
+              </div>
+              <button @click="addProtocol(pn)" class="text-[11px] text-brand-600 hover:underline">+ 添加协议</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Proxy -->
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+          <h2 class="text-sm font-semibold flex items-center gap-2"><span class="w-1 h-4 bg-brand-500 rounded"></span>Proxy</h2>
+          <div class="flex gap-2">
+            <button @click="generateProxyConfig" class="px-3 py-1.5 text-xs bg-ink-100 text-ink-700 rounded-md hover:bg-ink-300">生成 proxy/config.yaml</button>
+            <button @click="startProxyServer" :disabled="!proxyEnabled" :class="['px-3 py-1.5 text-xs rounded-md font-medium', proxyEnabled ? 'bg-brand-500 text-white hover:bg-brand-600' : 'bg-ink-300 text-ink-500 cursor-not-allowed']">启动代理服务</button>
+          </div>
+        </div>
+        <p class="text-[11px] text-ink-500 mb-3 leading-relaxed">代理模式：IDE → proxy(127.0.0.1:4000) → 真实 provider。开启后 init-env.py 会用 proxy 地址覆盖 LLM_ACTIVE_BASE_URL/API_KEY，并自动生成 proxy/config.yaml。</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-ink-500 w-24">enable</label>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" v-model="envData.proxy.enable" class="sr-only peer">
+              <div class="w-9 h-5 bg-ink-300 rounded-full peer-checked:bg-green-500 transition relative">
+                <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-4" :class="{'translate-x-4': envData.proxy && envData.proxy.enable}"></div>
+              </div>
+            </label>
+            <span :class="['text-xs', envData.proxy && envData.proxy.enable ? 'text-green-600' : 'text-ink-500']">{{ envData.proxy && envData.proxy.enable ? '已开启' : '已关闭' }}</span>
+          </div>
+          <div></div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-ink-500 w-24">base_url</label>
+            <input v-model="envData.proxy.base_url" :disabled="!envData.proxy || !envData.proxy.enable" placeholder="http://127.0.0.1:4000/v1" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-ink-500 w-24">api_key</label>
+            <input type="password" v-model="envData.proxy.api_key" :disabled="!envData.proxy || !envData.proxy.enable" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded">
+          </div>
+          <div class="flex items-center gap-2 col-span-2">
+            <label class="text-xs text-ink-500 w-24">启动命令</label>
+            <input v-model="envData.proxy.start_cmd" placeholder="litellm --config proxy/config.yaml --port 4000" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono">
+          </div>
+        </div>
+      </div>
+
+      <!-- 其他配置 -->
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <h2 class="text-sm font-semibold flex items-center gap-2 mb-3 pb-3 border-b border-gray-100"><span class="w-1 h-4 bg-brand-500 rounded"></span>Embedding / TTS / ASR / Vision / Misc</h2>
+        <div class="space-y-3">
+          <div v-for="sec in ['embedding','tts','asr','vision','misc']" :key="sec" class="border border-gray-200 rounded-md p-3">
+            <h4 class="text-[11px] font-semibold text-ink-700 uppercase mb-2">{{ sec }}</h4>
+            <textarea v-model="envDataText[sec]" @input="updateEnvDataSection(sec)" rows="6" class="w-full px-2 py-1 text-[11px] border border-ink-300 rounded font-mono bg-gray-50"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 插件组装 ===================== -->
+    <div v-show="tab === 'plugin'" class="space-y-3">
+      <!-- 预定义插件快速安装 -->
+      <div class="bg-white rounded-xl shadow-card p-4">
+        <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+          <h3 class="text-sm font-semibold flex items-center gap-2">
+            <span class="w-1 h-4 bg-brand-500 rounded"></span>预定义插件
+            <span class="text-[10px] text-ink-500 font-normal">{{ plugins.length }} 个</span>
+          </h3>
+          <button @click="refreshPluginList" class="text-[11px] text-brand-600 hover:underline">刷新</button>
+        </div>
+        <div class="grid grid-cols-4 gap-2">
+          <div v-for="p in plugins" :key="p.file"
+               class="border border-ink-300 rounded-lg p-2.5 hover:border-brand-500 hover:shadow-card transition cursor-pointer flex flex-col">
+            <div class="flex justify-between items-start mb-1">
+              <div class="font-medium text-xs text-ink-900 truncate flex-1" :title="p.name">{{ p.name }}</div>
+              <span class="text-[10px] text-ink-500 ml-1">v{{ p.version }}</span>
+            </div>
+            <div class="text-[11px] text-ink-500 mb-1.5 line-clamp-2 flex-1">{{ p.description }}</div>
+            <div class="flex gap-1.5 mb-1.5 text-[10px]">
+              <span class="px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded">{{ p.skills_count }} skills</span>
+              <span class="px-1.5 py-0.5 bg-brand-50 text-brand-600 rounded">{{ p.mcp_count }} mcp</span>
+            </div>
+            <div class="flex gap-1">
+              <button @click="selectedPluginFile = p.file; loadExistingPlugin()" class="flex-1 px-2 py-1 text-[10px] bg-ink-100 text-ink-700 rounded hover:bg-ink-300">加载</button>
+              <button @click="installPredefinedPlugin(p.file)" class="flex-1 px-2 py-1 text-[10px] bg-green-500 text-white rounded hover:bg-green-600">安装</button>
+            </div>
+          </div>
+          <div v-if="!plugins.length" class="col-span-4 text-center text-ink-500 text-xs py-6">暂无预定义插件</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-[40%_28%_32%] gap-3">
+      <!-- 技能目录 -->
+      <div class="bg-white rounded-xl shadow-card p-3 max-h-[75vh] overflow-y-auto">
+        <h3 class="text-xs font-semibold mb-2 pb-2 border-b border-gray-100">技能目录</h3>
+        <div class="flex gap-1.5 mb-2 flex-wrap">
+          <select v-model="skillFilter.cat" class="px-2 py-1 text-[11px] border border-ink-300 rounded">
+            <option value="">全部分类</option>
+            <option v-for="c in skillCategories" :key="c">{{ c }}</option>
+          </select>
+          <select v-model="skillFilter.role" class="px-2 py-1 text-[11px] border border-ink-300 rounded">
+            <option value="">全部角色</option>
+            <option v-for="r in skillRoles" :key="r">{{ r }}</option>
+          </select>
+          <input v-model="skillFilter.text" placeholder="搜索..." class="flex-1 min-w-[100px] px-2 py-1 text-[11px] border border-ink-300 rounded">
+        </div>
+        <div class="space-y-1.5">
+          <div v-for="s in filteredLocalSkills" :key="s.skill_name"
+               @click="toggleSkill(s.skill_name)"
+               :class="['p-2 border rounded-md cursor-pointer transition', selectedSkills.includes(s.skill_name) ? 'border-brand-500 bg-brand-50' : 'border-ink-300 hover:border-brand-500 hover:bg-brand-50/30']">
+            <div class="flex items-center gap-1.5">
+              <input type="checkbox" :checked="selectedSkills.includes(s.skill_name)" @click.stop="toggleSkill(s.skill_name)" class="accent-brand-500">
+              <span class="font-medium text-xs">{{ s.skill_name }}</span>
+            </div>
+            <div class="mt-1"><span class="px-1 py-0.5 text-[10px] bg-ink-100 rounded">{{ s.category }}</span> <span v-if="s.role" class="px-1 py-0.5 text-[10px] bg-ink-100 rounded">{{ s.role }}</span></div>
+            <div class="text-[11px] text-ink-500 mt-0.5 line-clamp-2">{{ s.description }}</div>
+          </div>
+          <div v-if="!filteredLocalSkills.length" class="text-center text-ink-500 text-xs py-4">无匹配技能</div>
+        </div>
+      </div>
+      <!-- MCP 目录 -->
+      <div class="bg-white rounded-xl shadow-card p-3 max-h-[75vh] overflow-y-auto">
+        <h3 class="text-xs font-semibold mb-2 pb-2 border-b border-gray-100">MCP 目录</h3>
+        <input v-model="mcpFilterText" placeholder="过滤 MCP..." class="w-full px-2 py-1 text-[11px] border border-ink-300 rounded mb-2">
+        <div class="space-y-1.5">
+          <div v-for="(_, name) in (mcpTemplate.mcpServers || {})" :key="name"
+               v-show="!mcpFilterText || name.toLowerCase().includes(mcpFilterText.toLowerCase())"
+               @click="toggleMcp(name)"
+               :class="['p-2 border rounded-md cursor-pointer transition', selectedMcp.includes(name) ? 'border-brand-500 bg-brand-50' : 'border-ink-300 hover:border-brand-500']">
+            <div class="flex items-center gap-1.5">
+              <input type="checkbox" :checked="selectedMcp.includes(name)" @click.stop="toggleMcp(name)" class="accent-brand-500">
+              <span class="font-medium text-xs">{{ name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 插件定义 -->
+      <div class="bg-white rounded-xl shadow-card p-3 max-h-[75vh] overflow-y-auto">
+        <h3 class="text-xs font-semibold mb-2 pb-2 border-b border-gray-100">插件定义</h3>
+        <div class="flex gap-1.5 mb-3">
+          <select v-model="selectedPluginFile" class="flex-1 px-2 py-1 text-[11px] border border-ink-300 rounded">
+            <option value="">-- 加载已有插件 --</option>
+            <option v-for="p in plugins" :key="p.file" :value="p.file">{{ p.name }} ({{ p.skills_count }}s/{{ p.mcp_count }}m)</option>
+          </select>
+          <button @click="loadExistingPlugin" class="px-2 py-1 text-[11px] bg-ink-100 rounded hover:bg-ink-300">加载</button>
+          <button @click="deleteExistingPlugin" class="px-2 py-1 text-[11px] bg-red-50 text-red-500 rounded hover:bg-red-100">删</button>
+          <button @click="newPlugin" class="px-2 py-1 text-[11px] text-brand-600 hover:underline">新建</button>
+        </div>
+        <div class="space-y-2">
+          <div class="flex items-center gap-2"><label class="text-[11px] text-ink-500 w-16">name *</label><input v-model="pluginForm.name" placeholder="my-plugin" class="flex-1 px-2 py-1 text-xs border border-ink-300 rounded"></div>
+          <div class="flex items-center gap-2"><label class="text-[11px] text-ink-500 w-16">version</label><input v-model="pluginForm.version" class="flex-1 px-2 py-1 text-xs border border-ink-300 rounded"></div>
+          <div class="flex items-center gap-2"><label class="text-[11px] text-ink-500 w-16">desc</label><input v-model="pluginForm.description" class="flex-1 px-2 py-1 text-xs border border-ink-300 rounded"></div>
+          <div class="flex items-center gap-2"><label class="text-[11px] text-ink-500 w-16">author</label><input v-model="pluginForm.author" class="flex-1 px-2 py-1 text-xs border border-ink-300 rounded"></div>
+        </div>
+        <h4 class="text-[11px] text-ink-700 mt-3 mb-1">已选 Skills ({{ selectedSkills.length }})</h4>
+        <div class="border border-dashed border-ink-300 rounded p-2 min-h-[60px] space-y-1">
+          <div v-for="s in selectedSkills" :key="s" class="flex justify-between items-center text-xs bg-brand-50 px-2 py-1 rounded">
+            <span>{{ s }}</span><button @click="toggleSkill(s)" class="text-red-500">×</button>
+          </div>
+          <div v-if="!selectedSkills.length" class="text-center text-ink-500 text-[11px] py-2">未选择</div>
+        </div>
+        <h4 class="text-[11px] text-ink-700 mt-2 mb-1">已选 MCP ({{ selectedMcp.length }})</h4>
+        <div class="border border-dashed border-ink-300 rounded p-2 min-h-[40px] space-y-1">
+          <div v-for="m in selectedMcp" :key="m" class="flex justify-between items-center text-xs bg-brand-50 px-2 py-1 rounded">
+            <span>{{ m }}</span><button @click="toggleMcp(m)" class="text-red-500">×</button>
+          </div>
+          <div v-if="!selectedMcp.length" class="text-center text-ink-500 text-[11px] py-2">未选择</div>
+        </div>
+        <div class="flex gap-1.5 mt-3 flex-wrap items-center">
+          <button @click="previewPlugin" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded hover:bg-brand-600">预览 JSON</button>
+          <button @click="savePluginFile" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">保存</button>
+          <button @click="installPluginFile" class="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600">生成配置</button>
+          <span class="text-[11px] text-ink-500 ml-2">同步到</span>
+          <select v-model="pluginTargetIde" class="px-2 py-1 text-[11px] border border-ink-300 rounded">
+            <option value="All">全部 IDE</option>
+            <option v-for="ide in ideList" :key="ide.key" :value="ide.key">{{ ide.label }}</option>
+          </select>
+          <button @click="syncPluginToIde" class="px-3 py-1.5 text-xs bg-brand-50 text-brand-600 rounded hover:bg-brand-100">同步</button>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- ===================== MCP 安装 ===================== -->
+    <div v-show="tab === 'mcp'" class="space-y-4">
+      <div class="flex gap-1 border-b border-gray-200">
+        <button v-for="t in [{k:'keys',l:'密钥管理'},{k:'market',l:'ModelScope 市场'},{k:'local',l:'本地预置'},{k:'manual',l:'手动添加'}]" :key="t.k"
+                @click="mcpTab = t.k"
+                :class="['px-4 py-2 text-xs font-medium border-b-2', mcpTab === t.k ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700']">{{ t.l }}</button>
+      </div>
+      <!-- 密钥管理 (mcp.yaml) -->
+      <div v-show="mcpTab === 'keys'" class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+          <h2 class="text-sm font-semibold flex items-center gap-2">
+            <span class="w-1 h-4 bg-brand-500 rounded"></span>MCP 密钥
+            <span class="text-[10px] text-ink-500 font-normal">mcp.yaml</span>
+          </h2>
+          <div class="flex gap-2">
+            <button @click="addMcpConfigKey" class="px-3 py-1.5 text-xs bg-brand-50 text-brand-600 rounded-md hover:bg-brand-100 font-medium">+ 添加 Key</button>
+            <button @click="saveMcpConfig" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600 font-medium">保存 mcp.yaml</button>
+          </div>
+        </div>
+        <p class="text-[11px] text-ink-500 mb-4 leading-relaxed">该文件保存 MCP 服务的密钥/Token（如 <code class="bg-ink-100 px-1 rounded">TAVILY_API_KEY</code>、<code class="bg-ink-100 px-1 rounded">YUQUE_TOKEN</code> 等），供 init-env.py 生成运行态配置时使用。</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div v-for="(_, k) in (mcpConfigData.mcp || {})" :key="k" class="flex items-center gap-2 group">
+            <label class="text-xs text-ink-500 w-44 truncate font-mono" :title="k">{{ k }}</label>
+            <input type="password" v-model="mcpConfigData.mcp[k]" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono">
+            <button @click="deleteMcpConfigKey(k)" class="opacity-0 group-hover:opacity-100 transition px-2 py-1 text-[11px] text-red-500 hover:bg-red-50 rounded">删</button>
+          </div>
+          <div v-if="!Object.keys(mcpConfigData.mcp || {}).length" class="col-span-2 text-center text-ink-500 text-xs py-6">暂无 MCP 密钥，点击 "+ 添加 Key" 开始</div>
+        </div>
+      </div>
+      <!-- 市场 -->
+      <div v-show="mcpTab === 'market'" class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex gap-2 mb-3">
+          <input v-model="mcpMarketQ" @keydown.enter="searchMcpMarket" placeholder="关键词，如：地图、搜索、文件..." class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
+          <button @click="searchMcpMarket" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">搜索</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div v-for="s in mcpMarketResults" :key="s.id" class="border border-ink-300 rounded-md p-3 hover:border-brand-500 hover:shadow-sm transition">
+            <div class="flex justify-between items-start mb-1">
+              <div class="font-medium text-sm">{{ s.name }}</div>
+              <span v-if="s.is_hosted" class="px-1.5 py-0.5 text-[10px] bg-green-50 text-green-600 rounded">Hosted</span>
+            </div>
+            <div class="text-[11px] text-ink-500 mb-1">{{ s.id }} · {{ s.author }}</div>
+            <div class="text-xs text-ink-700 line-clamp-2 mb-2">{{ s.description }}</div>
+            <div class="flex gap-1">
+              <button @click="getMcpDetail(s.owner, s.name)" class="px-2 py-1 text-[11px] bg-ink-100 rounded hover:bg-ink-300">查看配置</button>
+              <button @click="addMarketMcpToTemplate(s.owner, s.name, s.name)" class="px-2 py-1 text-[11px] bg-brand-50 text-brand-600 rounded hover:bg-brand-100">添加到模板</button>
+            </div>
+          </div>
+          <div v-if="!mcpMarketResults.length && mcpSearched" class="col-span-2 text-center text-ink-500 py-6 text-xs">无结果</div>
+        </div>
+      </div>
+      <!-- 本地预置 -->
+      <div v-show="mcpTab === 'local'" class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
+          <h2 class="text-sm font-semibold">本地 MCP 模板</h2>
+          <div class="flex gap-2">
+            <button @click="generateMcpRuntime" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">生成 mcp.json 运行态</button>
+            <button @click="saveMcpTemplate" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded hover:bg-brand-600">保存到模板</button>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <div v-for="(cfg, name) in (mcpTemplate.mcpServers || {})" :key="name" class="border border-ink-300 rounded-md p-2.5">
+            <div class="flex justify-between items-center">
+              <div class="font-medium text-sm">{{ name }}</div>
+              <div class="flex items-center gap-2">
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" :checked="!(cfg.disabled === true || cfg.disabled === 'true')" @change="toggleMcpDisabled(name, $event.target.checked)" class="sr-only peer">
+                  <div class="w-8 h-4 bg-ink-300 rounded-full peer-checked:bg-green-500 relative">
+                    <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition peer-checked:translate-x-4" :class="{'translate-x-4': !(cfg.disabled === true || cfg.disabled === 'true')}"></div>
+                  </div>
+                </label>
+                <button @click="deleteMcpEntry(name)" class="text-[11px] text-red-500 hover:bg-red-50 px-1.5 py-0.5 rounded">删</button>
+              </div>
+            </div>
+            <div class="text-[11px] text-ink-500 mt-0.5">{{ cfg.command ? cfg.command + ' ' + (cfg.args||[]).join(' ') : (cfg.url || '') }}</div>
+          </div>
+        </div>
+      </div>
+      <!-- 手动添加 -->
+      <div v-show="mcpTab === 'manual'" class="bg-white rounded-xl shadow-card p-5">
+        <h2 class="text-sm font-semibold mb-3 pb-3 border-b border-gray-100">手动添加 MCP</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">name *</label><input v-model="mcpForm.name" placeholder="my-mcp" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">type</label>
+            <select v-model="mcpForm.type" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"><option value="">stdio（默认）</option><option value="http">http</option><option value="streamableHttp">streamableHttp</option></select>
+          </div>
+          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">command</label><input v-model="mcpForm.command" placeholder="npx" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">args</label><input v-model="mcpForm.args" placeholder="-y, @modelcontextprotocol/server-filesystem, ./" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+          <div class="flex items-center gap-2 col-span-2"><label class="text-xs text-ink-500 w-20">url</label><input v-model="mcpForm.url" placeholder="http 类型填写" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+          <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">headers</label><textarea v-model="mcpForm.headers" rows="2" placeholder='{"Authorization":"Bearer xxx"}' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
+          <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">env</label><textarea v-model="mcpForm.env" rows="2" placeholder='{"API_KEY":"xxx"}' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
+          <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">Smithery 粘贴</label><textarea v-model="mcpForm.paste" rows="3" placeholder='粘贴完整 MCP 配置 JSON，自动解析' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button @click="parsePastedMcp" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">解析粘贴</button>
+          <button @click="addManualMcp" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded hover:bg-brand-600">添加到模板</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== Skill 安装 ===================== -->
+    <div v-show="tab === 'skill'" class="space-y-4">
+      <div class="flex gap-1 border-b border-gray-200">
+        <button v-for="t in [{k:'modelscope',l:'ModelScope 市场'},{k:'skillssh',l:'skills.sh'},{k:'local',l:'本地预置'}]" :key="t.k"
+                @click="skillSource = t.k"
+                :class="['px-4 py-2 text-xs font-medium border-b-2', skillSource === t.k ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500']">{{ t.l }}</button>
+      </div>
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex gap-2 mb-3 items-center">
+          <input v-model="skillSearchQ" @keydown.enter="searchSkills" placeholder="关键词，如：react、设计、API..." class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
+          <button @click="searchSkills" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">搜索</button>
+          <span class="text-[11px] text-ink-500">{{ skillSearchHint }}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div v-for="s in skillSearchResults" :key="s.source + s.name" class="border border-ink-300 rounded-md p-3 hover:border-brand-500 transition">
+            <div class="flex justify-between items-start mb-1">
+              <div class="font-medium text-sm">{{ s.name }}</div>
+              <span class="px-1.5 py-0.5 text-[10px] bg-ink-100 rounded">{{ s.source }}</span>
+            </div>
+            <div class="text-[11px] text-ink-500 mb-1">{{ s.author ? '作者: ' + s.author + ' | ' : '' }}安装量: {{ s.install_count || 0 }}</div>
+            <div class="text-xs text-ink-700 line-clamp-2 mb-2">{{ s.description }}</div>
+            <div class="flex justify-between items-center gap-2">
+              <code class="text-[10px] text-ink-500 flex-1 truncate">{{ s.install_command }}</code>
+              <button @click="installFromSearch(s)" class="px-2 py-1 text-[11px] bg-brand-50 text-brand-600 rounded hover:bg-brand-100 shrink-0">安装</button>
+            </div>
+          </div>
+          <div v-if="!skillSearchResults.length && skillSearched" class="col-span-2 text-center text-ink-500 py-6 text-xs">无结果</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <h2 class="text-sm font-semibold mb-2">手动安装</h2>
+        <div class="flex gap-2">
+          <input v-model="manualSkillInput" placeholder="owner/repo 或 owner/repo@skill 或 GitHub URL" class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
+          <button @click="installManualSkill" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">安装</button>
+        </div>
+        <p class="text-[11px] text-ink-500 mt-1">支持 vercel-labs/skills、vercel-labs/skills@find-skills、https://github.com/owner/repo</p>
+      </div>
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
+          <h2 class="text-sm font-semibold">已安装技能 ({{ installedSkills.length }})</h2>
+          <button @click="syncToIde" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">同步到 IDE</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div v-for="s in installedSkills" :key="s.name" class="border border-ink-300 rounded-md p-2.5">
+            <div class="flex justify-between items-center">
+              <div class="font-medium text-sm">{{ s.name }}</div>
+              <div class="flex gap-1">
+                <button @click="viewSkillMd(s.name)" class="text-[11px] text-brand-600 hover:underline">查看</button>
+                <button @click="uninstallSkill(s.name)" class="text-[11px] text-red-500 hover:underline">卸载</button>
+              </div>
+            </div>
+            <div class="text-[11px] text-ink-500 mt-0.5">{{ s.path }}</div>
+          </div>
+          <div v-if="!installedSkills.length" class="col-span-2 text-center text-ink-500 py-6 text-xs">未安装任何技能</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== IDE 同步 ===================== -->
+    <div v-show="tab === 'ide'" class="space-y-4">
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <div class="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
+          <h2 class="text-sm font-semibold flex items-center gap-2"><span class="w-1 h-4 bg-brand-500 rounded"></span>IDE 同步</h2>
+          <button @click="syncIde('All')" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600 font-medium">同步全部 IDE</button>
+        </div>
+        <p class="text-[11px] text-ink-500 mb-4 leading-relaxed">基于共享源 <code class="bg-ink-100 px-1 rounded">agents/</code>（rules + skills + mcp）+ <code class="bg-ink-100 px-1 rounded">llm.yaml</code> / <code class="bg-ink-100 px-1 rounded">mcp.yaml</code> 生成各 IDE 的运行态配置：rules 用 Junction 链接，MCP 按各 IDE 格式转换，LLM 配置从 llm.yaml 注入。</p>
+        <div class="grid grid-cols-3 gap-2">
+          <div v-for="ide in ideList" :key="ide.key"
+               class="border border-ink-300 rounded-lg p-3 hover:border-brand-500 hover:shadow-sm transition cursor-pointer"
+               @click="syncIde(ide.key)">
+            <div class="flex justify-between items-center mb-1">
+              <div class="font-medium text-sm">{{ ide.label }}</div>
+              <span class="text-[10px] text-ink-500">{{ ide.key }}</span>
+            </div>
+            <div class="text-[11px] text-ink-500 mb-2">{{ ide.desc }}</div>
+            <button class="w-full px-2 py-1 text-[11px] bg-brand-50 text-brand-600 rounded hover:bg-brand-100">单独同步</button>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-card p-5">
+        <h2 class="text-sm font-semibold mb-2">同步日志</h2>
+        <div class="log-panel bg-ink-900 text-gray-200 p-3 rounded-md text-xs max-h-[400px] overflow-y-auto whitespace-pre-wrap" ref="ideLogEl">{{ ideLog }}</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 全局日志面板 -->
+  <div v-if="logVisible" class="fixed bottom-4 right-4 w-[600px] max-w-[90vw] bg-ink-900 text-gray-200 rounded-lg shadow-2xl z-40">
+    <div class="flex justify-between items-center px-3 py-2 border-b border-white/10">
+      <span class="text-xs font-medium">安装日志</span>
+      <button @click="logVisible = false" class="text-white/60 hover:text-white">×</button>
+    </div>
+    <div class="log-panel p-3 text-xs max-h-[300px] overflow-y-auto whitespace-pre-wrap" ref="logEl">{{ logText }}</div>
+  </div>
+
+  <!-- Modal -->
+  <div v-if="modalVisible" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="modalVisible = false">
+    <div class="bg-white rounded-lg p-5 w-[80%] max-w-[700px] max-h-[80vh] overflow-auto">
+      <h3 class="text-sm font-semibold mb-3">{{ modalTitle }}</h3>
+      <pre class="bg-ink-900 text-gray-200 p-3 rounded text-xs overflow-auto">{{ modalContent }}</pre>
+      <div class="text-right mt-3"><button @click="modalVisible = false" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">关闭</button></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <transition-group name="fade" tag="div" class="fixed top-16 right-4 space-y-2 z-50">
+    <div v-for="t in toasts" :key="t.id"
+         :class="['px-4 py-2 rounded-md shadow-lg text-sm', t.type === 'err' ? 'bg-red-500' : t.type === 'warn' ? 'bg-orange-500' : 'bg-green-500', 'text-white']">{{ t.msg }}</div>
+  </transition-group>
+</div>
+
+<script>
+const { createApp, reactive, ref, computed, onMounted } = Vue;
+
+createApp({
+  setup() {
+    // ===== 状态 =====
+    const tab = ref('env');
+    const tabs = [
+      { key: 'env', label: 'LLM Provider' },
+      { key: 'mcp', label: 'MCP' },
+      { key: 'skill', label: 'Skill 安装' },
+      { key: 'plugin', label: '插件组装' },
+      { key: 'ide', label: 'IDE 同步' },
+    ];
+    const envData = reactive({ llm: {}, mcp: {}, proxy: {} });
+    const mcpConfigData = reactive({ mcp: {} });  // 新：mcp.yaml 独立文件
+    const envDataText = reactive({});
+    const openedProviders = reactive(new Set());
+
+    const localSkills = ref([]);
+    const skillFilter = reactive({ cat: '', role: '', text: '' });
+    const mcpFilterText = ref('');
+    const mcpTemplate = reactive({ mcpServers: {} });
+    const selectedSkills = ref([]);
+    const selectedMcp = ref([]);
+
+    const plugins = ref([]);
+    const selectedPluginFile = ref('');
+    const pluginForm = reactive({ name: '', version: '1.0.0', description: '', author: 'MyAgentPlugin' });
+    const pluginTargetIde = ref('All');  // 插件生成配置后同步的目标 IDE
+
+    const mcpTab = ref('market');
+    const mcpMarketQ = ref('');
+    const mcpMarketResults = ref([]);
+    const mcpSearched = ref(false);
+    const mcpForm = reactive({ name:'', type:'', command:'', args:'', url:'', headers:'', env:'', paste:'' });
+
+    const skillSource = ref('modelscope');
+    const skillSearchQ = ref('');
+    const skillSearchResults = ref([]);
+    const skillSearchHint = ref('');
+    const skillSearched = ref(false);
+    const manualSkillInput = ref('');
+    const installedSkills = ref([]);
+
+    const ideList = [
+      { key: 'Cursor', label: 'Cursor', desc: '.cursor/rules + .cursor/mcp.json' },
+      { key: 'Trae', label: 'Trae', desc: '.trae/rules + .trae/mcp.json' },
+      { key: 'trae-cn', label: 'Trae CN', desc: '.trae-cn/rules + mcp' },
+      { key: 'trae-solo-cn', label: 'Trae Solo CN', desc: '.trae-solo-cn/rules' },
+      { key: 'Codex', label: 'Codex', desc: '.codex/config.toml + rules' },
+      { key: 'Claude', label: 'Claude', desc: '.claude/settings.json + rules' },
+      { key: 'WorkBuddy', label: 'WorkBuddy', desc: '.workbuddy/rules + models.json' },
+      { key: 'Qoder', label: 'Qoder', desc: '.qoder/rules' },
+      { key: 'OpenClaw', label: 'OpenClaw', desc: '.openclaw/rules' },
+      { key: 'OpenCode', label: 'OpenCode', desc: 'opencode.json' },
+      { key: 'IDEA', label: 'IDEA', desc: 'IDEA 配置' },
+      { key: 'Agents', label: 'Agents', desc: '通用 agents 配置' },
+    ];
+    const ideLog = ref('');
+
+    // 日志/Modal/Toast
+    const logVisible = ref(false);
+    const logText = ref('');
+    const logEl = ref(null);
+    const ideLogEl = ref(null);
+    const modalVisible = ref(false);
+    const modalTitle = ref('');
+    const modalContent = ref('');
+    const toasts = ref([]);
+    let toastId = 0;
+
+    // ===== 工具 =====
+    async function api(url, opts = {}) {
+      const r = await fetch(url, opts);
+      return r.json();
+    }
+    function toast(msg, type = 'ok') {
+      const id = ++toastId;
+      toasts.value.push({ id, msg, type });
+      setTimeout(() => { toasts.value = toasts.value.filter(t => t.id !== id); }, 3000);
+    }
+    function showModal(title, content) { modalTitle.value = title; modalContent.value = content; modalVisible.value = true; }
+    function appendLog(text) {
+      logText.value += text + '\n';
+      logVisible.value = true;
+      if (logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight;
+    }
+    async function runSse(url, onDone) {
+      logText.value = ''; logVisible.value = true;
+      return new Promise(resolve => {
+        const evt = new EventSource(url);
+        evt.onmessage = e => {
+          appendLog(e.data);
+          if (e.data.startsWith('[DONE]')) { evt.close(); if (onDone) onDone(); resolve(); }
+        };
+        evt.onerror = () => { appendLog('[连接中断]'); evt.close(); resolve(); };
+      });
+    }
+
+    // ===== Env =====
+    const providerNames = computed(() => Object.keys(envData.llm || {}).filter(k => !k.startsWith('_') && envData.llm[k] && typeof envData.llm[k] === 'object'));
+    const proxyEnabled = computed(() => envData.proxy && envData.proxy.enable);
+
+    async function loadEnv() {
+      const r = await api('/api/llm');
+      if (!r.ok) { toast('加载 llm.yaml 失败: ' + r.error, 'err'); return; }
+      Object.assign(envData, r.data);
+      ['embedding','tts','asr','vision','misc'].forEach(sec => {
+        envDataText[sec] = JSON.stringify(envData[sec] || {}, null, 2);
+      });
+    }
+    function toggleProvider(name) {
+      if (openedProviders.has(name)) openedProviders.delete(name); else openedProviders.add(name);
+    }
+    function updateEnvDataSection(sec) {
+      try { envData[sec] = JSON.parse(envDataText[sec] || '{}'); } catch (e) {}
+    }
+    function addProvider() {
+      const name = prompt('请输入 Provider 名称');
+      if (!name || !name.trim()) return;
+      const t = name.trim();
+      if (envData.llm[t]) { toast('Provider 已存在', 'warn'); return; }
+      envData.llm[t] = { openai: { base_url: '', api_key: '', models: {} } };
+      if (!envData.llm._active_provider) envData.llm._active_provider = t;
+      toast('已添加 Provider: ' + t);
+    }
+    function deleteProvider(name) {
+      if (!confirm('删除 Provider "' + name + '"？')) return;
+      delete envData.llm[name];
+      if (envData.llm._active_provider === name) {
+        envData.llm._active_provider = providerNames.value[0] || '';
+      }
+      toast('已删除');
+    }
+    function setActiveProvider(name) { envData.llm._active_provider = name; toast('Active 设为: ' + name); }
+    function addProtocol(pn) {
+      const proto = prompt('协议名称（如 openai/anthropic）');
+      if (!proto || !proto.trim()) return;
+      const t = proto.trim().toLowerCase();
+      if (envData.llm[pn][t]) { toast('协议已存在', 'warn'); return; }
+      envData.llm[pn][t] = { base_url: '', api_key: '', models: {} };
+    }
+    function deleteProtocol(pn, proto) { if (confirm('删除协议 "' + proto + '"？')) delete envData.llm[pn][proto]; }
+    function addModel(pn, proto) {
+      envData.llm[pn][proto].models = envData.llm[pn][proto].models || {};
+      const k = 'new-model-' + Date.now();
+      envData.llm[pn][proto].models[k] = { name: k };
+    }
+    function deleteModel(pn, proto, mk) { delete envData.llm[pn][proto].models[mk]; }
+    function renameModel(pn, proto, oldKey, newKey) {
+      if (oldKey === newKey) return;
+      const m = envData.llm[pn][proto].models;
+      m[newKey] = m[oldKey]; delete m[oldKey];
+    }
+    async function saveEnv() {
+      const r = await api('/api/llm', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: envData }) });
+      r.ok ? toast('llm.yaml 已保存') : toast('保存失败: ' + r.error, 'err');
+    }
+    async function loadMcpConfig() {
+      const r = await api('/api/mcp-config');
+      if (r.ok) {
+        // 用返回的 mcp 字段覆盖 mcpConfigData.mcp
+        Object.keys(mcpConfigData.mcp).forEach(k => delete mcpConfigData.mcp[k]);
+        Object.assign(mcpConfigData.mcp, (r.data && r.data.mcp) || {});
+      }
+      return r;
+    }
+    async function saveMcpConfig() {
+      const r = await api('/api/mcp-config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: mcpConfigData }) });
+      r.ok ? toast('mcp.yaml 已保存') : toast('保存失败: ' + r.error, 'err');
+    }
+    async function addMcpConfigKey() {
+      const key = prompt('请输入 MCP 密钥名称（如 TAVILY_API_KEY）');
+      if (!key || !key.trim()) return;
+      const t = key.trim();
+      if (mcpConfigData.mcp[t]) { toast('Key 已存在', 'warn'); return; }
+      mcpConfigData.mcp[t] = '';
+      toast('已添加: ' + t);
+    }
+    async function deleteMcpConfigKey(key) {
+      if (!confirm('删除 key "' + key + '"？')) return;
+      const r = await api('/api/mcp-config/key/' + encodeURIComponent(key), { method:'DELETE' });
+      if (r.ok) { delete mcpConfigData.mcp[key]; toast('已删除'); }
+      else toast('删除失败: ' + r.error, 'err');
+    }
+    async function generateProxyConfig() {
+      const sr = await api('/api/llm', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: envData }) });
+      if (!sr.ok) { toast('llm.yaml 保存失败', 'err'); return; }
+      const r = await api('/api/init-env', { method:'POST' });
+      if (r.ok) { toast('proxy/config.yaml 已生成'); if (r.stdout) showModal('init-env 输出', r.stdout + (r.stderr ? '\n--- stderr ---\n' + r.stderr : '')); }
+      else toast('生成失败', 'err');
+    }
+    async function startProxyServer() {
+      if (!proxyEnabled.value) { toast('请先开启 proxy', 'warn'); return; }
+      const cmd = envData.proxy.start_cmd || 'litellm --config proxy/config.yaml --port 4000';
+      await runSse('/api/proxy/start?cmd=' + encodeURIComponent(cmd));
+    }
+
+    // ===== Plugin =====
+    const skillCategories = computed(() => [...new Set(localSkills.value.map(s => s.category).filter(Boolean))].sort());
+    const skillRoles = computed(() => [...new Set(localSkills.value.flatMap(s => (s.role || '').split('|')).filter(Boolean))].sort());
+    const filteredLocalSkills = computed(() => localSkills.value.filter(s => {
+      if (skillFilter.cat && s.category !== skillFilter.cat) return false;
+      if (skillFilter.role && !(s.role || '').includes(skillFilter.role)) return false;
+      if (skillFilter.text) {
+        const t = skillFilter.text.toLowerCase();
+        if (!(s.skill_name || '').toLowerCase().includes(t) && !(s.description || '').toLowerCase().includes(t)) return false;
+      }
+      return true;
+    }));
+    async function loadLocalSkills() {
+      if (localSkills.value.length) return;
+      const r = await api('/api/skills/local');
+      if (r.ok) localSkills.value = r.data || [];
+    }
+    async function loadMcpCatalog() {
+      const r = await api('/api/mcp/list');
+      if (r.ok) Object.assign(mcpTemplate, r.data);
+    }
+    function toggleSkill(name) {
+      const i = selectedSkills.value.indexOf(name);
+      if (i >= 0) selectedSkills.value.splice(i, 1); else selectedSkills.value.push(name);
+    }
+    function toggleMcp(name) {
+      const i = selectedMcp.value.indexOf(name);
+      if (i >= 0) selectedMcp.value.splice(i, 1); else selectedMcp.value.push(name);
+    }
+    async function refreshPluginList() {
+      const r = await api('/api/plugins');
+      if (r.ok) plugins.value = r.data || [];
+    }
+    async function loadExistingPlugin() {
+      if (!selectedPluginFile.value) { toast('请选择插件', 'warn'); return; }
+      const r = await api('/api/plugin/load?file=' + encodeURIComponent(selectedPluginFile.value));
+      if (!r.ok) { toast('加载失败: ' + r.error, 'err'); return; }
+      const d = r.data;
+      pluginForm.name = d.name || ''; pluginForm.version = d.version || '1.0.0';
+      pluginForm.description = d.description || ''; pluginForm.author = d.author || 'MyAgentPlugin';
+      selectedSkills.value = [...(d.skills || [])].map(s => typeof s === 'string' ? s : s.name || s.skill || '');
+      selectedMcp.value = Object.keys(d.mcpServers || {});
+      toast('已加载: ' + d.name);
+    }
+    async function deleteExistingPlugin() {
+      if (!selectedPluginFile.value) { toast('请选择插件', 'warn'); return; }
+      if (!confirm('删除文件 ' + selectedPluginFile.value + '?')) return;
+      const r = await api('/api/plugin/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ file: selectedPluginFile.value }) });
+      if (r.ok) { toast('已删除'); selectedPluginFile.value = ''; refreshPluginList(); } else toast('删除失败: ' + r.error, 'err');
+    }
+    function newPlugin() {
+      selectedPluginFile.value = '';
+      pluginForm.name = ''; pluginForm.version = '1.0.0'; pluginForm.description = ''; pluginForm.author = 'MyAgentPlugin';
+      selectedSkills.value = []; selectedMcp.value = [];
+    }
+    function buildPluginConfig() {
+      return {
+        name: pluginForm.name.trim(), version: pluginForm.version.trim() || '1.0.0',
+        description: pluginForm.description.trim(), author: pluginForm.author.trim() || 'MyAgentPlugin',
+        mcpServers: Object.fromEntries(selectedMcp.value.map(n => [n, mcpTemplate.mcpServers[n]])),
+        skills: [...selectedSkills.value],
+      };
+    }
+    function previewPlugin() {
+      const cfg = buildPluginConfig();
+      if (!cfg.name) { toast('name 必填', 'warn'); return; }
+      showModal('plugin.json 预览', JSON.stringify(cfg, null, 2));
+    }
+    async function savePluginFile() {
+      const cfg = buildPluginConfig();
+      if (!cfg.name) { toast('name 必填', 'warn'); return; }
+      const r = await api('/api/plugin/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+      r.ok ? toast('已保存: ' + r.path) : toast('保存失败: ' + r.error, 'err');
+      refreshPluginList();
+    }
+    async function installPluginFile() {
+      const cfg = buildPluginConfig();
+      if (!cfg.name) { toast('name 必填', 'warn'); return; }
+      const sr = await api('/api/plugin/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+      if (!sr.ok) { toast('保存失败', 'err'); return; }
+      const safe = cfg.name.replace(/[^a-zA-Z0-9_-]/g, '');
+      await runSse('/api/plugin/install?file=' + encodeURIComponent(safe + '.plugin.json'), loadInstalledSkills);
+    }
+    async function installPredefinedPlugin(file) {
+      // 一键安装预定义插件：直接调用 /api/plugin/install
+      if (!file) { toast('缺少插件文件', 'warn'); return; }
+      await runSse('/api/plugin/install?file=' + encodeURIComponent(file), loadInstalledSkills);
+    }
+    async function syncPluginToIde() {
+      // 生成配置（保存 plugin.json + 安装技能）后同步到选定 IDE
+      const cfg = buildPluginConfig();
+      if (!cfg.name) { toast('name 必填', 'warn'); return; }
+      // 1. 保存 plugin.json
+      const sr = await api('/api/plugin/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
+      if (!sr.ok) { toast('保存失败: ' + sr.error, 'err'); return; }
+      toast('已保存: ' + sr.path);
+      // 2. 安装技能到 .agents/skills（流式日志）
+      const safe = cfg.name.replace(/[^a-zA-Z0-9_-]/g, '');
+      await runSse('/api/plugin/install?file=' + encodeURIComponent(safe + '.plugin.json'), loadInstalledSkills);
+      // 3. 同步到选定 IDE
+      const ide = pluginTargetIde.value;
+      toast(`正在同步到 ${ide}...`);
+      ideLog.value = '';
+      const evt = new EventSource('/api/init-ide?ide=' + encodeURIComponent(ide));
+      evt.onmessage = e => {
+        ideLog.value += e.data + '\n';
+        if (ideLogEl.value) ideLogEl.value.scrollTop = ideLogEl.value.scrollHeight;
+        if (e.data.startsWith('[DONE]')) {
+          evt.close();
+          toast(`同步完成: ${ide}`);
+        }
+      };
+      evt.onerror = () => { ideLog.value += '[连接中断]\n'; evt.close(); toast('同步中断', 'err'); };
+      // 切换到 IDE 同步 tab 让用户看到日志
+      tab.value = 'ide';
+    }
+
+    // ===== MCP =====
+    async function searchMcpMarket() {
+      if (!mcpMarketQ.value.trim()) return;
+      mcpSearched.value = true;
+      const r = await api('/api/mcp/search?q=' + encodeURIComponent(mcpMarketQ.value));
+      if (r.ok) mcpMarketResults.value = r.data || [];
+      else toast('搜索失败: ' + r.error, 'err');
+    }
+    async function getMcpDetail(owner, name) {
+      const r = await api('/api/mcp/detail?owner=' + encodeURIComponent(owner) + '&name=' + encodeURIComponent(name));
+      if (r.ok) showModal(owner + '/' + name, JSON.stringify(r.data, null, 2));
+      else toast('获取失败: ' + r.error, 'err');
+    }
+    async function addMarketMcpToTemplate(owner, name, localName) {
+      const r = await api('/api/mcp/detail?owner=' + encodeURIComponent(owner) + '&name=' + encodeURIComponent(name));
+      if (!r.ok) { toast('获取失败: ' + r.error, 'err'); return; }
+      const data = r.data || {};
+      const servers = data.servers || data.mcp_servers || [];
+      let cfg;
+      if (servers.length) {
+        const s = servers[0];
+        cfg = { type: s.type, url: s.url };
+        if (data.auth_required) cfg.headers = { Authorization: 'Bearer ${MODELSCOPE_TOKEN}' };
+      } else if (data.server_config) {
+        cfg = data.server_config;
+      } else { toast('未找到 server_config', 'warn'); return; }
+      mcpTemplate.mcpServers[localName] = cfg;
+      const sr = await api('/api/mcp/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: mcpTemplate }) });
+      sr.ok ? toast('已添加 ' + localName) : toast('保存失败: ' + sr.error, 'err');
+    }
+    async function toggleMcpDisabled(name, enabled) {
+      mcpTemplate.mcpServers[name].disabled = !enabled;
+      await api('/api/mcp/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: mcpTemplate }) });
+    }
+    async function deleteMcpEntry(name) {
+      if (!confirm('删除 ' + name + '?')) return;
+      delete mcpTemplate.mcpServers[name];
+      await api('/api/mcp/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: mcpTemplate }) });
+    }
+    async function saveMcpTemplate() {
+      const r = await api('/api/mcp/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: mcpTemplate }) });
+      r.ok ? toast('模板已保存') : toast('保存失败: ' + r.error, 'err');
+    }
+    async function generateMcpRuntime() {
+      const r = await api('/api/init-env', { method:'POST' });
+      if (r.ok) { toast('mcp.json 已生成'); if (r.stdout) showModal('init-env 输出', r.stdout + (r.stderr ? '\n--- stderr ---\n' + r.stderr : '')); }
+      else toast('生成失败: ' + (r.error || ''), 'err');
+    }
+    function parsePastedMcp() {
+      if (!mcpForm.paste.trim()) { toast('请粘贴配置', 'warn'); return; }
+      try {
+        let p = JSON.parse(mcpForm.paste);
+        if (p.mcpServers) p = p.mcpServers;
+        const k = Object.keys(p)[0];
+        if (k) {
+          const cfg = p[k];
+          mcpForm.name = k;
+          if (cfg.command) mcpForm.command = cfg.command;
+          if (cfg.args) mcpForm.args = cfg.args.join(',');
+          if (cfg.url) mcpForm.url = cfg.url;
+          if (cfg.type) mcpForm.type = cfg.type;
+          if (cfg.headers) mcpForm.headers = JSON.stringify(cfg.headers, null, 2);
+          if (cfg.env) mcpForm.env = JSON.stringify(cfg.env, null, 2);
+          toast('已解析');
+        }
+      } catch (e) { toast('JSON 解析失败: ' + e.message, 'err'); }
+    }
+    async function addManualMcp() {
+      if (!mcpForm.name.trim()) { toast('name 必填', 'warn'); return; }
+      const cfg = {};
+      if (mcpForm.type) cfg.type = mcpForm.type;
+      if (mcpForm.command) cfg.command = mcpForm.command;
+      if (mcpForm.args.trim()) cfg.args = mcpForm.args.split(',').map(s => s.trim()).filter(Boolean);
+      if (mcpForm.url) cfg.url = mcpForm.url;
+      try { if (mcpForm.headers.trim()) cfg.headers = JSON.parse(mcpForm.headers); } catch (e) { toast('headers JSON 错误', 'err'); return; }
+      try { if (mcpForm.env.trim()) cfg.env = JSON.parse(mcpForm.env); } catch (e) { toast('env JSON 错误', 'err'); return; }
+      mcpTemplate.mcpServers[mcpForm.name.trim()] = cfg;
+      const r = await api('/api/mcp/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ data: mcpTemplate }) });
+      r.ok ? toast('已添加 ' + mcpForm.name) : toast('保存失败: ' + r.error, 'err');
+    }
+
+    // ===== Skill =====
+    async function searchSkills() {
+      const q = skillSearchQ.value.trim();
+      if (!q) return;
+      skillSearched.value = true;
+      skillSearchHint.value = '搜索中...';
+      if (skillSource.value === 'local') {
+        skillSearchResults.value = localSkills.value.filter(s =>
+          (s.skill_name || '').toLowerCase().includes(q.toLowerCase()) ||
+          (s.description || '').toLowerCase().includes(q.toLowerCase())
+        ).map(s => ({ source:'local', name:s.skill_name, description:s.description, author:'', install_count:0, install_command:'npx skills add ' + s.skill_name + ' --copy -y' }));
+        skillSearchHint.value = '';
+        return;
+      }
+      const r = await api('/api/skills/search?q=' + encodeURIComponent(q) + '&source=' + skillSource.value);
+      skillSearchHint.value = '';
+      if (!r.ok) { toast('搜索失败', 'err'); return; }
+      if (r.errors && r.errors.length) toast('部分源失败: ' + r.errors.join('; '), 'warn');
+      skillSearchResults.value = r.data || [];
+    }
+    async function installFromSearch(s) {
+      let cmd = s.install_command || '';
+      if (cmd && cmd.startsWith('npx')) {
+        if (!cmd.includes('--copy')) cmd = cmd.replace(/ -y$/, '') + ' --copy -y';
+        if (!cmd.includes('-y')) cmd += ' -y';
+        await runSse('/api/skills/install?command=' + encodeURIComponent(cmd), loadInstalledSkills);
+        return;
+      }
+      const src = s.author ? s.author + '/' + s.name : s.name;
+      await runSse('/api/skills/install?source=' + encodeURIComponent(src), loadInstalledSkills);
+    }
+    async function installManualSkill() {
+      if (!manualSkillInput.value.trim()) return;
+      await runSse('/api/skills/install?source=' + encodeURIComponent(manualSkillInput.value.trim()), loadInstalledSkills);
+    }
+    async function loadInstalledSkills() {
+      const r = await api('/api/skills/installed');
+      if (r.ok) installedSkills.value = r.data || [];
+    }
+    async function viewSkillMd(name) {
+      const r = await api('/api/skills/' + encodeURIComponent(name) + '/skillmd');
+      if (r.ok) showModal(name + ' / SKILL.md', r.content); else toast('读取失败: ' + r.error, 'err');
+    }
+    async function uninstallSkill(name) {
+      if (!confirm('卸载 ' + name + '?')) return;
+      const r = await api('/api/skills/' + encodeURIComponent(name), { method:'DELETE' });
+      r.ok ? (toast('已卸载'), loadInstalledSkills()) : toast('卸载失败: ' + r.error, 'err');
+    }
+    async function syncToIde() { await syncIde('All'); }
+
+    // ===== IDE =====
+    async function syncIde(ide) {
+      ideLog.value = '';
+      const evt = new EventSource('/api/init-ide?ide=' + ide);
+      evt.onmessage = e => {
+        ideLog.value += e.data + '\n';
+        if (ideLogEl.value) ideLogEl.value.scrollTop = ideLogEl.value.scrollHeight;
+        if (e.data.startsWith('[DONE]')) evt.close();
+      };
+      evt.onerror = () => { ideLog.value += '[连接中断]\n'; evt.close(); };
+    }
+
+    // ===== MetaInfo =====
+    const metaInfo = computed(() => {
+      const llm = envData.llm || {};
+      const ap = llm._active_provider || '-';
+      const pc = providerNames.value.length;
+      const mc = Object.keys(mcpTemplate.mcpServers || {}).length;
+      const em = Object.values(mcpTemplate.mcpServers || {}).filter(c => !(c.disabled === true || c.disabled === 'true')).length;
+      const ic = installedSkills.value.length;
+      const plc = plugins.value.length;
+      const mkc = Object.keys(mcpConfigData.mcp || {}).length;
+      return `LLM: <b>${ap}</b> | Providers: ${pc} | MCP模板: ${em}/${mc} | MCP密钥: ${mkc} | 已装 Skills: ${ic} | Plugins: ${plc}`;
+    });
+
+    // ===== Bootstrap =====
+    onMounted(async () => {
+      const [llmR, mcpCfgR, skillsR, mcpR, installedR, pluginsR] = await Promise.all([
+        api('/api/llm').catch(e => ({ ok: false })),
+        api('/api/mcp-config').catch(e => ({ ok: false })),
+        api('/api/skills/local').catch(e => ({ ok: false })),
+        api('/api/mcp/list').catch(e => ({ ok: false })),
+        api('/api/skills/installed').catch(e => ({ ok: false })),
+        api('/api/plugins').catch(e => ({ ok: false })),
+      ]);
+      if (llmR.ok) {
+        Object.assign(envData, llmR.data);
+        ['embedding','tts','asr','vision','misc'].forEach(sec => {
+          envDataText[sec] = JSON.stringify(envData[sec] || {}, null, 2);
+        });
+        if (!envData.proxy) envData.proxy = { enable: false };
+      }
+      if (mcpCfgR.ok && mcpCfgR.data) {
+        Object.assign(mcpConfigData, mcpCfgR.data);
+      }
+      if (skillsR.ok) localSkills.value = skillsR.data || [];
+      if (mcpR.ok) Object.assign(mcpTemplate, mcpR.data);
+      if (installedR.ok) installedSkills.value = installedR.data || [];
+      if (pluginsR.ok) plugins.value = pluginsR.data || [];
+    });
+
+    return {
+      tab, tabs, envData, envDataText, openedProviders, providerNames, proxyEnabled, metaInfo,
+      mcpConfigData,
+      localSkills, skillFilter, skillCategories, skillRoles, filteredLocalSkills,
+      mcpFilterText, mcpTemplate, selectedSkills, selectedMcp,
+      plugins, selectedPluginFile, pluginForm,
+      mcpTab, mcpMarketQ, mcpMarketResults, mcpSearched, mcpForm,
+      skillSource, skillSearchQ, skillSearchResults, skillSearchHint, skillSearched,
+      manualSkillInput, installedSkills,
+      ideList, ideLog, ideLogEl,
+      logVisible, logText, logEl, modalVisible, modalTitle, modalContent, toasts,
+      toggleProvider, updateEnvDataSection, addProvider, deleteProvider, setActiveProvider,
+      addProtocol, deleteProtocol, addModel, deleteModel, renameModel, saveEnv,
+      loadMcpConfig, saveMcpConfig, addMcpConfigKey, deleteMcpConfigKey,
+      generateProxyConfig, startProxyServer,
+      toggleSkill, toggleMcp, refreshPluginList, loadExistingPlugin, deleteExistingPlugin,
+      newPlugin, previewPlugin, savePluginFile, installPluginFile,
+      installPredefinedPlugin, syncPluginToIde, pluginTargetIde,
+      searchMcpMarket, getMcpDetail, addMarketMcpToTemplate,
+      toggleMcpDisabled, deleteMcpEntry, saveMcpTemplate, generateMcpRuntime,
+      parsePastedMcp, addManualMcp,
+      searchSkills, installFromSearch, installManualSkill,
+      viewSkillMd, uninstallSkill, syncToIde, syncIde,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

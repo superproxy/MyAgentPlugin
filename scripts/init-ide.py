@@ -11,13 +11,13 @@ Uses directory junctions so source is the single source of truth.
 - .codex/rules/     : Junction -> source rules/
 - .claude/rules/    : Junction -> source rules/
 - .workbuddy/rules/ : Junction -> source rules/
-- .workbuddy/models.json : Generated (LLM model list from env.yaml)
+- .workbuddy/models.json : Generated (LLM model list from llm.yaml)
 - .qoder/rules/     : Junction -> source rules/
 - .openclaw/rules/  : Junction -> source rules/
 - .mcp.json         : Symlink/Copy -> source mcp/mcp.json
 - .cursor/mcp.json   : Generated (mcpServers key)
 - .codex/config.toml : Generated (TOML format)
-- .claude/settings.json : Generated (from template + env.yaml)
+- .claude/settings.json : Generated (from template + llm.yaml/mcp.yaml)
 - opencode.json       : Generated (OpenCode format)
 """
 
@@ -27,6 +27,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 COLOR_CYAN = "\033[96m"
@@ -48,7 +49,7 @@ def _load_yaml_module():
         import yaml
         return yaml
     except ImportError:
-        print(f"{COLOR_RED}[ERROR] PyYAML is required to read env.yaml. Install: pip install pyyaml{COLOR_RESET}")
+        print(f"{COLOR_RED}[ERROR] PyYAML is required to read llm.yaml/mcp.yaml. Install: pip install pyyaml{COLOR_RESET}")
         sys.exit(1)
 
 
@@ -58,6 +59,40 @@ def load_env_config_file(path: Path) -> dict:
         if path.suffix.lower() in (".yaml", ".yml"):
             return _load_yaml_module().safe_load(f)
         return json.load(f)
+
+
+# ============================================================
+# 拆分后的配置文件：env.yaml → llm.yaml + mcp.yaml
+# ============================================================
+_LLM_TOP_KEYS = ["llm", "embedding", "tts", "asr", "vision", "misc"]
+
+
+def load_merged_env_config(source_dir: Path) -> dict | None:
+    """从 llm.yaml + mcp.yaml 加载合并配置（向后兼容 env.yaml）。
+
+    返回合并后的 dict（与旧 env.yaml 结构一致），或 None 如果没有任何配置文件。
+    """
+    llm_file = source_dir / "llm.yaml"
+    mcp_file = source_dir / "mcp.yaml"
+    env_file = source_dir / "env.yaml"
+
+    if llm_file.exists():
+        llm_data = load_env_config_file(llm_file) or {}
+        mcp_data = load_env_config_file(mcp_file) or {} if mcp_file.exists() else {}
+        merged = {}
+        for k in _LLM_TOP_KEYS:
+            if k in llm_data:
+                merged[k] = llm_data[k]
+        merged["mcp"] = mcp_data.get("mcp", {})
+        if "_description" in llm_data:
+            merged["_description"] = llm_data["_description"]
+        return merged
+
+    if env_file.exists():
+        # 向后兼容
+        return load_env_config_file(env_file)
+
+    return None
 
 
 def write_banner(title: str, source_dir: str, target_dir: str, ide: str) -> None:
@@ -226,12 +261,42 @@ def convert_to_cursor_mcp(source_file: Path, target_file: Path, force: bool) -> 
         cursor_mcp["mcpServers"][server_name] = server_config
 
     target_file.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(target_file, "w", encoding="utf-8") as f:
-        json.dump(cursor_mcp, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-
+    _safe_write_json(target_file, cursor_mcp)
     print(f"{COLOR_GREEN}[OK] Cursor MCP generated: {target_file}{COLOR_RESET}")
+
+
+def _safe_write_json(target_file: Path, data: dict, retries: int = 5, delay: float = 0.4) -> None:
+    """写入 JSON 文件，带重试机制以处理 PermissionError（文件被占用）。
+
+    - 写入前清除只读属性
+    - 失败时退避重试（delay, delay*2, delay*4, ...）
+    - 重试用尽仍失败则抛出原异常
+    """
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            # 清除只读属性（如果有）
+            if target_file.exists():
+                try:
+                    os.chmod(target_file, 0o666)
+                except Exception:
+                    pass
+            with open(target_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+                f.write("\n")
+            return
+        except PermissionError as e:
+            last_exc = e
+            wait = delay * (2 ** attempt)
+            print(f"{COLOR_YELLOW}[!] {target_file.name} 被占用，{wait:.1f}s 后重试 ({attempt + 1}/{retries}){COLOR_RESET}")
+            time.sleep(wait)
+        except OSError as e:
+            last_exc = e
+            wait = delay * (2 ** attempt)
+            print(f"{COLOR_YELLOW}[!] 写入 {target_file.name} 失败: {e}，{wait:.1f}s 后重试 ({attempt + 1}/{retries}){COLOR_RESET}")
+            time.sleep(wait)
+    # 重试用尽
+    raise last_exc
 
 
 def _toml_string(value: str) -> str:
@@ -363,7 +428,7 @@ def _resolve_placeholders(obj, env_map: dict[str, str]) -> tuple[any, int]:
 
 def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
                             template_file: Path | None = None,
-                            env_file: Path | None = None) -> None:
+                            env_config: dict | None = None) -> None:
     if not source_file.exists():
         print(f"{COLOR_YELLOW}[!] MCP source not found: {source_file}{COLOR_RESET}")
         return
@@ -413,8 +478,7 @@ def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
                     opencode_mcp[name] = cfg
 
     env_map = {}
-    if env_file and env_file.exists():
-        env_config = load_env_config_file(env_file)
+    if env_config:
         active_provider = ""
         active_protocols = ["openai"]
         llm_section = env_config.get("llm", {})
@@ -488,10 +552,9 @@ def convert_to_opencode_mcp(source_file: Path, target_file: Path, force: bool,
     if env_map:
         config, replaced = _resolve_placeholders(config, env_map)
         if replaced > 0:
-            print(f"{COLOR_GREEN}[OK] Resolved {replaced} placeholder(s) from env.yaml{COLOR_RESET}")
+            print(f"{COLOR_GREEN}[OK] Resolved {replaced} placeholder(s) from llm.yaml/mcp.yaml{COLOR_RESET}")
 
-    if env_file and env_file.exists():
-        env_config = load_env_config_file(env_file)
+    if env_config:
         llm_section = env_config.get("llm", {})
         if isinstance(llm_section, dict):
             providers_config = config.get("provider", {})
@@ -880,7 +943,7 @@ def init_codex(target_dir: Path, source_rules_dir: Path, source_mcp_file: Path,
     return "codex"
 
 
-def _generate_claude_settings(template_file: Path, target_file: Path, env_file: Path, force: bool) -> None:
+def _generate_claude_settings(template_file: Path, target_file: Path, env_config: dict | None, force: bool) -> None:
     if not template_file.exists():
         print(f"{COLOR_YELLOW}[!] Claude settings template not found: {template_file}{COLOR_RESET}")
         return
@@ -895,8 +958,7 @@ def _generate_claude_settings(template_file: Path, target_file: Path, env_file: 
         config = json.load(f)
 
     env_map = {}
-    if env_file and env_file.exists():
-        env_config = load_env_config_file(env_file)
+    if env_config:
         active_provider = ""
         active_protocols = ["openai"]
         llm_section = env_config.get("llm", {})
@@ -984,8 +1046,8 @@ def init_claude(target_dir: Path, source_rules_dir: Path, source_mcp_file: Path,
 
     source_dir = source_rules_dir.parent.parent
     claude_settings_template = source_dir / "ide" / "claude" / "settings.template.json"
-    env_file = source_dir / "env.yaml"
-    _generate_claude_settings(claude_settings_template, claude_dir / "settings.json", env_file, force)
+    env_config = load_merged_env_config(source_dir)
+    _generate_claude_settings(claude_settings_template, claude_dir / "settings.json", env_config, force)
 
     copy_skills_safe(source_skills_dir, claude_skills_dir, ".claude/skills/", force)
 
@@ -993,8 +1055,8 @@ def init_claude(target_dir: Path, source_rules_dir: Path, source_mcp_file: Path,
     return "claude"
 
 
-def generate_workbuddy_models(env_file: Path, target_file: Path, force: bool) -> None:
-    """从 env.yaml 的 llm 配置生成 .workbuddy/models.json (WorkBuddy 模型列表)。
+def generate_workbuddy_models(env_config: dict | None, target_file: Path, force: bool) -> None:
+    """从 llm.yaml 的 llm 配置生成 .workbuddy/models.json (WorkBuddy 模型列表)。
 
     遍历 llm.<provider>.<protocol>.models，展开为 WorkBuddy 所需的模型数组。
     - 跳过 _ 前缀键（元数据）和 proxy 段
@@ -1002,15 +1064,14 @@ def generate_workbuddy_models(env_file: Path, target_file: Path, force: bool) ->
     - api_key 为空的协议自动剪枝
     - 同 (model_id, url) 去重
     """
-    if not env_file.exists():
-        print(f"{COLOR_YELLOW}[!] env.yaml not found, skip models.json{COLOR_RESET}")
+    if not env_config:
+        print(f"{COLOR_YELLOW}[!] llm.yaml not found, skip models.json{COLOR_RESET}")
         return
 
     if target_file.exists() and not force:
         print(f"{COLOR_YELLOW}[!] {target_file.name} exists, use --force to overwrite{COLOR_RESET}")
         return
 
-    env_config = load_env_config_file(env_file)
     llm_section = env_config.get("llm", {})
     if not isinstance(llm_section, dict):
         print(f"{COLOR_YELLOW}[!] llm section invalid, skip models.json{COLOR_RESET}")
@@ -1082,8 +1143,8 @@ def init_workbuddy(target_dir: Path, source_rules_dir: Path, source_mcp_file: Pa
 
     # 生成 WorkBuddy 特有的 LLM 模型列表
     source_dir = source_rules_dir.parent.parent
-    env_file = source_dir / "env.yaml"
-    generate_workbuddy_models(env_file, wb_dir / "models.json", force)
+    env_config = load_merged_env_config(source_dir)
+    generate_workbuddy_models(env_config, wb_dir / "models.json", force)
 
     copy_skills_safe(source_skills_dir, wb_skills_dir, ".workbuddy/skills/", force)
 
@@ -1148,8 +1209,8 @@ def init_opencode(target_dir: Path, source_rules_dir: Path, source_mcp_file: Pat
 
     source_dir = source_rules_dir.parent.parent
     opencode_template = source_dir / "ide" / "opencode" / "opencode.template.json"
-    env_file = source_dir / "env.yaml"
-    convert_to_opencode_mcp(source_mcp_file, opencode_dir / "opencode.json", force, opencode_template, env_file)
+    env_config = load_merged_env_config(source_dir)
+    convert_to_opencode_mcp(source_mcp_file, opencode_dir / "opencode.json", force, opencode_template, env_config)
 
     copy_skills_safe(source_skills_dir, opencode_skills_dir, ".opencode/skills/", force)
 
@@ -1400,7 +1461,7 @@ def main() -> None:
     if "codex" in processed:
         print(f"  {COLOR_DARKGRAY}.codex/config.toml    (generated, TOML format){COLOR_RESET}")
     if "claude" in processed:
-        print(f"  {COLOR_DARKGRAY}.claude/settings.json (generated, from template + env.yaml){COLOR_RESET}")
+        print(f"  {COLOR_DARKGRAY}.claude/settings.json (generated, from template + llm.yaml/mcp.yaml){COLOR_RESET}")
     if "opencode" in processed:
         print(f"  {COLOR_DARKGRAY}.opencode/opencode.json (generated, OpenCode format){COLOR_RESET}")
     if "idea" in processed:

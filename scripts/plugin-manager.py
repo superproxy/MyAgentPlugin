@@ -26,7 +26,7 @@ def _load_yaml_module():
         import yaml
         return yaml
     except ImportError:
-        print(f"{COLOR_RED}[ERROR] PyYAML is required to read env.yaml. Install: pip install pyyaml{COLOR_RESET}")
+        print(f"{COLOR_RED}[ERROR] PyYAML is required to read llm.yaml/mcp.yaml. Install: pip install pyyaml{COLOR_RESET}")
         sys.exit(1)
 
 
@@ -478,8 +478,8 @@ def main() -> None:
     )
     install_parser.add_argument(
         "--env-file",
-        default="env.yaml",
-        help="环境变量文件路径 (默认: env.yaml)"
+        default="llm.yaml",
+        help="环境变量文件路径 (默认: llm.yaml)"
     )
     install_parser.add_argument(
         "--mcp-template",
@@ -650,8 +650,8 @@ def main() -> None:
     )
     install_parser.add_argument(
         "--env-file",
-        default="env.yaml",
-        help="环境变量文件路径 (默认: env.yaml)"
+        default="llm.yaml",
+        help="环境变量文件路径 (默认: llm.yaml)"
     )
     install_parser.add_argument(
         "--mcp-template",

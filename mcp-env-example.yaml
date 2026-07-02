@@ -1,0 +1,10 @@
+_description: MCP 密钥配置模板 - 复制为 mcp.yaml 并填入真实密钥。此文件可安全提交到版本控制。
+mcp:
+  AMAP_MAPS_API_KEY: ''
+  WECOM_WEBHOOK_URL: ''
+  TAVILY_API_KEY: ''
+  FIRECRAWL_API_KEY: ''
+  YUQUE_TOKEN: ''
+  STITCH_API_KEY: ''
+  MASTERGO_MAGIC_TOKEN: ''
+  CONTEXT7_API_KEY: ''

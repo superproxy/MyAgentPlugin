@@ -2,7 +2,7 @@
 """
 MCP 环境初始化脚本 (Linux / macOS / Windows 通用)
 
-从 env.yaml 读取密钥配置（支持 provider + protocol 双层结构），支持两个独立步骤：
+从 llm.yaml + mcp.yaml 读取密钥配置（支持 provider + protocol 双层结构），支持两个独立步骤：
   - Env      : 设置环境变量（写入 shell 配置文件或仅导出提示）
   - Generate : 从 mcp.template.json 模板生成 mcp.json
   - All      : 依次执行以上两步（默认）
@@ -42,7 +42,7 @@ def _load_yaml_module():
         import yaml
         return yaml
     except ImportError:
-        print(f"{COLOR_RED}[ERROR] PyYAML is required to read env.yaml. Install: pip install pyyaml{COLOR_RESET}")
+        print(f"{COLOR_RED}[ERROR] PyYAML is required to read llm.yaml/mcp.yaml. Install: pip install pyyaml{COLOR_RESET}")
         sys.exit(1)
 
 
@@ -64,6 +64,74 @@ def save_env_config_file(path: Path, data: dict) -> None:
             f.write("\n")
 
 
+# ============================================================
+# 拆分后的配置文件：env.yaml → llm.yaml + mcp.yaml
+# ============================================================
+LLM_TOP_KEYS = ["llm", "embedding", "tts", "asr", "vision", "misc"]
+
+
+def load_split_env_config(project_root: Path, silent: bool = False) -> dict:
+    """从 llm.yaml + mcp.yaml 加载并合并配置（向后兼容 env.yaml）。
+
+    优先级：
+      1. llm.yaml + mcp.yaml 都存在 → 合并
+      2. 只有 llm.yaml → mcp 部分用空 dict
+      3. 只有 env.yaml → 直接读 env.yaml（向后兼容）
+      4. 都没有 → 报错
+    """
+    llm_file = project_root / "llm.yaml"
+    mcp_file = project_root / "mcp.yaml"
+    env_file = project_root / "env.yaml"
+
+    if llm_file.exists():
+        if not silent:
+            print(f"{COLOR_GREEN}[READ] {llm_file}{COLOR_RESET}")
+        llm_data = load_env_config_file(llm_file) or {}
+        mcp_data = {}
+        if mcp_file.exists():
+            if not silent:
+                print(f"{COLOR_GREEN}[READ] {mcp_file}{COLOR_RESET}")
+            mcp_data = load_env_config_file(mcp_file) or {}
+        merged = {}
+        for k in LLM_TOP_KEYS:
+            if k in llm_data:
+                merged[k] = llm_data[k]
+        merged["mcp"] = mcp_data.get("mcp", {})
+        # 保留 description
+        if "_description" in llm_data:
+            merged["_description"] = llm_data["_description"]
+        return merged
+
+    if env_file.exists():
+        # 向后兼容：直接读 env.yaml
+        if not silent:
+            print(f"{COLOR_GREEN}[READ] {env_file}{COLOR_RESET}")
+        return load_env_config_file(env_file)
+
+    # 都没有
+    print(f"{COLOR_RED}[ERROR] Config files not found.{COLOR_RESET}")
+    print(f"  Expected: {llm_file} + {mcp_file}")
+    print()
+    print("Steps:")
+    print("  1. Copy llm-env-example.yaml to llm.yaml")
+    print("  2. Copy mcp-env-example.yaml to mcp.yaml")
+    print("  3. Fill in real API Keys in llm.yaml / mcp.yaml")
+    print("  4. Re-run this script")
+    sys.exit(1)
+
+
+def save_split_env_config(project_root: Path, config: dict) -> None:
+    """将配置拆分保存回 llm.yaml + mcp.yaml。"""
+    llm_file = project_root / "llm.yaml"
+    mcp_file = project_root / "mcp.yaml"
+    llm_data = {k: v for k, v in (config or {}).items() if k in LLM_TOP_KEYS}
+    if "_description" in config:
+        llm_data["_description"] = config["_description"]
+    mcp_data = {"mcp": (config or {}).get("mcp", {})}
+    save_env_config_file(llm_file, llm_data)
+    save_env_config_file(mcp_file, mcp_data)
+
+
 PROTOCOL_ENV_MAP = {
     "openai": {
         "base_url": "OPEN_AI_API_BASE_URL",
@@ -79,13 +147,17 @@ PROTOCOL_ENV_MAP = {
 
 
 def read_env_config(env_file: Path, silent: bool = False) -> dict:
+    """[已弃用] 旧版单文件读取，保留用于向后兼容。
+    新代码请使用 load_split_env_config(project_root)。
+    """
     if not env_file.exists():
         print(f"{COLOR_RED}[ERROR] Config file not found: {env_file}{COLOR_RESET}")
         print()
         print("Steps:")
-        print("  1. Copy env.example.yaml to env.yaml")
-        print("  2. Fill in real API Keys in env.yaml")
-        print("  3. Re-run this script")
+        print("  1. Copy llm-env-example.yaml to llm.yaml")
+        print("  2. Copy mcp-env-example.yaml to mcp.yaml")
+        print("  3. Fill in real API Keys in llm.yaml / mcp.yaml")
+        print("  4. Re-run this script")
         sys.exit(1)
     if not silent:
         print(f"{COLOR_GREEN}[READ] {env_file}{COLOR_RESET}")
@@ -448,7 +520,11 @@ def switch_provider(env_config: dict, provider: str, protocol: str | None, env_f
 
     env_config["llm"]["_active_provider"] = provider
     env_config["llm"]["_active_protocol"] = protocol
-    save_env_config_file(env_file, env_config)
+    # 拆分保存到 llm.yaml + mcp.yaml（向后兼容 env.yaml）
+    if env_file.name == "llm.yaml":
+        save_split_env_config(env_file.parent, env_config)
+    else:
+        save_env_config_file(env_file, env_config)
     print(f"{COLOR_GREEN}[OK] Active provider switched to: {provider}/{protocol}{COLOR_RESET}")
     return env_config
 
@@ -654,7 +730,7 @@ def invoke_generate_step(
     remaining = re.findall(r"\$\{(\w+)\}", template_content)
     if remaining:
         print()
-        print(f"  {COLOR_YELLOW}[WARN] Unresolved placeholders (missing in env.yaml):{COLOR_RESET}")
+        print(f"  {COLOR_YELLOW}[WARN] Unresolved placeholders (missing in llm.yaml/mcp.yaml):{COLOR_RESET}")
         seen = sorted(set(remaining))
         for p in seen:
             print(f"    - ${{{p}}}")
@@ -715,8 +791,8 @@ def main():
     )
     parser.add_argument(
         "-f", "--env-file",
-        default=str(PROJECT_ROOT / "env.yaml"),
-        help="Path to env.yaml (default: project_root/env.yaml)",
+        default=str(PROJECT_ROOT / "llm.yaml"),
+        help="Path to llm.yaml (default: project_root/llm.yaml; mcp.yaml auto-loaded from same dir)",
     )
     parser.add_argument(
         "--template-file",
@@ -759,7 +835,10 @@ def main():
     template_file = Path(args.template_file)
     output_file = Path(args.output_file)
 
-    env_config = read_env_config(env_file, silent=(args.action == "ExportShell"))
+    # 从 llm.yaml + mcp.yaml 加载合并配置（向后兼容 env.yaml）
+    # env_file 用于判断是否为拆分模式（llm.yaml）以决定保存方式
+    env_config = load_split_env_config(env_file.parent if env_file.name == "llm.yaml" else PROJECT_ROOT,
+                                        silent=(args.action == "ExportShell"))
 
     if args.provider:
         env_config = switch_provider(env_config, args.provider, args.protocol, env_file)
@@ -773,7 +852,11 @@ def main():
             new_protocols = [args.protocol] if args.protocol in available_protocols else available_protocols
         protocol_str = "|".join(new_protocols)
         env_config["llm"]["_active_protocol"] = protocol_str
-        save_env_config_file(env_file, env_config)
+        # 拆分保存到 llm.yaml + mcp.yaml（向后兼容 env.yaml）
+        if env_file.name == "llm.yaml":
+            save_split_env_config(env_file.parent, env_config)
+        else:
+            save_env_config_file(env_file, env_config)
         print(f"{COLOR_GREEN}[OK] Protocol updated: {active}/{protocol_str}{COLOR_RESET}")
 
     active_provider = get_active_provider(env_config)
