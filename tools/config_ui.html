@@ -3,24 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <title>MyAgentPlugin 配置工具</title>
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        brand: { 50:'#eef4ff',100:'#d9e6ff',500:'#165dff',600:'#0e42d2',700:'#0a2e9c' },
-        ink: { 900:'#1f2329',700:'#4e5969',500:'#86909c',300:'#c9cdd4',100:'#f7f8fa' }
-      },
-      boxShadow: {
-        'card': '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)',
-        'glow': '0 0 0 3px rgba(22,93,255,0.15)'
-      }
-    }
+<script src="/static/vue.global.prod.js"></script>
+<script src="/static/tailwind.jit.js"></script>
+<style type="text/tailwindcss">
+  @theme {
+    --color-brand-50: #eef4ff;
+    --color-brand-100: #d9e6ff;
+    --color-brand-500: #165dff;
+    --color-brand-600: #0e42d2;
+    --color-brand-700: #0a2e9c;
+    --color-ink-100: #f7f8fa;
+    --color-ink-300: #c9cdd4;
+    --color-ink-500: #86909c;
+    --color-ink-700: #4e5969;
+    --color-ink-900: #1f2329;
+    --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);
+    --shadow-glow: 0 0 0 3px rgba(22,93,255,0.15);
   }
-}
-</script>
+</style>
 <style>
   body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
   [v-cloak] { display: none; }
@@ -357,54 +357,57 @@ tailwind.config = {
         <span class="text-[10px] text-brand-600 ml-1">勾选启用 → 生成 mcp.json → 同步到 IDE</span>
       </div>
 
-      <!-- 添加方式 ① 市场搜索 -->
+      <!-- 添加方式（子 tab：市场搜索 / 手动添加） -->
       <div class="bg-white rounded-xl shadow-card p-5">
         <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
-          <h2 class="text-sm font-semibold flex items-center gap-2"><span class="w-1 h-4 bg-brand-500 rounded"></span>添加方式 · 市场搜索</h2>
-          <span class="text-[10px] text-ink-500">ModelScope 市场</span>
-        </div>
-        <div class="flex gap-2 mb-3">
-          <input v-model="mcpMarketQ" @keydown.enter="searchMcpMarket" placeholder="关键词，如：地图、搜索、文件..." class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
-          <button @click="searchMcpMarket" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">搜索</button>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div v-for="s in mcpMarketResults" :key="s.id" class="border border-ink-300 rounded-md p-3 hover:border-brand-500 hover:shadow-sm transition">
-            <div class="flex justify-between items-start mb-1">
-              <div class="font-medium text-sm">{{ s.name }}</div>
-              <span v-if="s.is_hosted" class="px-1.5 py-0.5 text-[10px] bg-green-50 text-green-600 rounded">Hosted</span>
-            </div>
-            <div class="text-[11px] text-ink-500 mb-1">{{ s.id }} · {{ s.author }}</div>
-            <div class="text-xs text-ink-700 line-clamp-2 mb-2">{{ s.description }}</div>
-            <div class="flex gap-1">
-              <button @click="getMcpDetail(s.owner, s.name)" class="px-2 py-1 text-[11px] bg-ink-100 rounded hover:bg-ink-300">查看配置</button>
-              <button @click="addMarketMcpToTemplate(s.owner, s.name, s.name)" class="px-2 py-1 text-[11px] bg-brand-50 text-brand-600 rounded hover:bg-brand-100">添加到已配置</button>
-            </div>
+          <div class="flex items-center gap-1">
+            <button @click="mcpTab='market'" :class="['px-3 py-1 text-xs font-medium rounded-t border-b-2 -mb-px', mcpTab==='market' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700']">市场搜索</button>
+            <button @click="mcpTab='manual'" :class="['px-3 py-1 text-xs font-medium rounded-t border-b-2 -mb-px', mcpTab==='manual' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700']">手动添加</button>
           </div>
-          <div v-if="!mcpMarketResults.length && mcpSearched" class="col-span-2 text-center text-ink-500 py-6 text-xs">无结果</div>
+          <span class="text-[10px] text-ink-500">{{ mcpTab==='market' ? 'ModelScope 市场' : '填写表单或粘贴 Smithery 配置' }}</span>
         </div>
-      </div>
 
-      <!-- 添加方式 ② 手动添加 -->
-      <div class="bg-white rounded-xl shadow-card p-5">
-        <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
-          <h2 class="text-sm font-semibold flex items-center gap-2"><span class="w-1 h-4 bg-brand-500 rounded"></span>添加方式 · 手动添加</h2>
-          <span class="text-[10px] text-ink-500">填写表单或粘贴 Smithery 配置</span>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">name *</label><input v-model="mcpForm.name" placeholder="my-mcp" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
-          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">type</label>
-            <select v-model="mcpForm.type" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"><option value="">stdio（默认）</option><option value="http">http</option><option value="streamableHttp">streamableHttp</option></select>
+        <!-- 子 tab：市场搜索 -->
+        <div v-show="mcpTab==='market'">
+          <div class="flex gap-2 mb-3">
+            <input v-model="mcpMarketQ" @keydown.enter="searchMcpMarket" placeholder="关键词，如：地图、搜索、文件..." class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
+            <button @click="searchMcpMarket" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">搜索</button>
           </div>
-          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">command</label><input v-model="mcpForm.command" placeholder="npx" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
-          <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">args</label><input v-model="mcpForm.args" placeholder="-y, @modelcontextprotocol/server-filesystem, ./" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
-          <div class="flex items-center gap-2 col-span-2"><label class="text-xs text-ink-500 w-20">url</label><input v-model="mcpForm.url" placeholder="http 类型填写" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
-          <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">headers</label><textarea v-model="mcpForm.headers" rows="2" placeholder='{"Authorization":"Bearer xxx"}' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
-          <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">env</label><textarea v-model="mcpForm.env" rows="2" placeholder='{"API_KEY":"xxx"}' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
-          <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">Smithery 粘贴</label><textarea v-model="mcpForm.paste" rows="3" placeholder='粘贴完整 MCP 配置 JSON，自动解析' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div v-for="s in mcpMarketResults" :key="s.id" class="border border-ink-300 rounded-md p-3 hover:border-brand-500 hover:shadow-sm transition">
+              <div class="flex justify-between items-start mb-1">
+                <div class="font-medium text-sm">{{ s.name }}</div>
+                <span v-if="s.is_hosted" class="px-1.5 py-0.5 text-[10px] bg-green-50 text-green-600 rounded">Hosted</span>
+              </div>
+              <div class="text-[11px] text-ink-500 mb-1">{{ s.id }} · {{ s.author }}</div>
+              <div class="text-xs text-ink-700 line-clamp-2 mb-2">{{ s.description }}</div>
+              <div class="flex gap-1">
+                <button @click="getMcpDetail(s.owner, s.name)" class="px-2 py-1 text-[11px] bg-ink-100 rounded hover:bg-ink-300">查看配置</button>
+                <button @click="addMarketMcpToTemplate(s.owner, s.name, s.name)" class="px-2 py-1 text-[11px] bg-brand-50 text-brand-600 rounded hover:bg-brand-100">添加到已配置</button>
+              </div>
+            </div>
+            <div v-if="!mcpMarketResults.length && mcpSearched" class="col-span-2 text-center text-ink-500 py-6 text-xs">无结果</div>
+          </div>
         </div>
-        <div class="flex gap-2 mt-3">
-          <button @click="parsePastedMcp" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">解析粘贴</button>
-          <button @click="addManualMcp" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded hover:bg-brand-600">添加到已配置</button>
+
+        <!-- 子 tab：手动添加 -->
+        <div v-show="mcpTab==='manual'">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">name *</label><input v-model="mcpForm.name" placeholder="my-mcp" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+            <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">type</label>
+              <select v-model="mcpForm.type" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"><option value="">stdio（默认）</option><option value="http">http</option><option value="streamableHttp">streamableHttp</option></select>
+            </div>
+            <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">command</label><input v-model="mcpForm.command" placeholder="npx" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+            <div class="flex items-center gap-2"><label class="text-xs text-ink-500 w-20">args</label><input v-model="mcpForm.args" placeholder="-y, @modelcontextprotocol/server-filesystem, ./" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+            <div class="flex items-center gap-2 col-span-2"><label class="text-xs text-ink-500 w-20">url</label><input v-model="mcpForm.url" placeholder="http 类型填写" class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded"></div>
+            <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">headers</label><textarea v-model="mcpForm.headers" rows="2" placeholder='{"Authorization":"Bearer xxx"}' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
+            <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">env</label><textarea v-model="mcpForm.env" rows="2" placeholder='{"API_KEY":"xxx"}' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
+            <div class="flex items-start gap-2 col-span-2"><label class="text-xs text-ink-500 w-20 mt-1.5">Smithery 粘贴</label><textarea v-model="mcpForm.paste" rows="3" placeholder='粘贴完整 MCP 配置 JSON，自动解析' class="flex-1 px-2 py-1.5 text-xs border border-ink-300 rounded font-mono"></textarea></div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button @click="parsePastedMcp" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">解析粘贴</button>
+            <button @click="addManualMcp" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded hover:bg-brand-600">添加到已配置</button>
+          </div>
         </div>
       </div>
 
@@ -418,8 +421,8 @@ tailwind.config = {
           <div class="flex gap-2">
             <button @click="toggleAllMcp(true)" class="px-2 py-1.5 text-[11px] bg-ink-100 rounded hover:bg-ink-300">全选</button>
             <button @click="toggleAllMcp(false)" class="px-2 py-1.5 text-[11px] bg-ink-100 rounded hover:bg-ink-300">全不选</button>
-            <button @click="generateMcpRuntime" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">生成 mcp.json</button>
             <button @click="saveMcpAll" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded hover:bg-brand-600">保存 mcp.yaml</button>
+            <span class="text-[10px] text-ink-500 self-center ml-1">保存后点顶部「同步到 IDE」自动生成各 IDE 格式</span>
           </div>
         </div>
         <div class="space-y-2 mb-4">
@@ -491,50 +494,73 @@ tailwind.config = {
         </button>
         <span class="text-[10px] text-brand-600 ml-1">仅同步 agents/skills → 各 IDE skills/</span>
       </div>
-      <div class="flex gap-1 border-b border-gray-200">
-        <button v-for="t in [{k:'modelscope',l:'ModelScope 市场'},{k:'skillssh',l:'skills.sh'},{k:'local',l:'本地预置'}]" :key="t.k"
-                @click="skillSource = t.k"
-                :class="['px-4 py-2 text-xs font-medium border-b-2', skillSource === t.k ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500']">{{ t.l }}</button>
-      </div>
+      <!-- 添加方式（子 tab：市场检索 / 手动安装） -->
       <div class="bg-white rounded-xl shadow-card p-5">
-        <div class="flex gap-2 mb-3 items-center">
-          <input v-model="skillSearchQ" @keydown.enter="searchSkills" placeholder="关键词，如：react、设计、API..." class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
-          <button @click="searchSkills" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">搜索</button>
-          <span class="text-[11px] text-ink-500">{{ skillSearchHint }}</span>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div v-for="s in skillSearchResults" :key="s.source + s.name" class="border border-ink-300 rounded-md p-3 hover:border-brand-500 transition">
-            <div class="flex justify-between items-start mb-1">
-              <div class="font-medium text-sm">{{ s.name }}</div>
-              <span class="px-1.5 py-0.5 text-[10px] bg-ink-100 rounded">{{ s.source }}</span>
-            </div>
-            <div class="text-[11px] text-ink-500 mb-1">{{ s.author ? '作者: ' + s.author + ' | ' : '' }}安装量: {{ s.install_count || 0 }}</div>
-            <div class="text-xs text-ink-700 line-clamp-2 mb-2">{{ s.description }}</div>
-            <div class="flex justify-between items-center gap-2">
-              <code class="text-[10px] text-ink-500 flex-1 truncate">{{ s.install_command }}</code>
-              <button @click="installFromSearch(s)" class="px-2 py-1 text-[11px] bg-brand-50 text-brand-600 rounded hover:bg-brand-100 shrink-0">安装</button>
-            </div>
+        <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+          <div class="flex items-center gap-1">
+            <button @click="skillTab='market'" :class="['px-3 py-1 text-xs font-medium rounded-t border-b-2 -mb-px', skillTab==='market' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700']">市场检索</button>
+            <button @click="skillTab='manual'" :class="['px-3 py-1 text-xs font-medium rounded-t border-b-2 -mb-px', skillTab==='manual' ? 'border-brand-500 text-brand-600' : 'border-transparent text-ink-500 hover:text-ink-700']">手动安装</button>
           </div>
-          <div v-if="!skillSearchResults.length && skillSearched" class="col-span-2 text-center text-ink-500 py-6 text-xs">无结果</div>
+          <span class="text-[10px] text-ink-500">{{ skillTab==='market' ? '从市场搜索并安装技能' : '输入 owner/repo 或 GitHub URL 安装' }}</span>
         </div>
-      </div>
-      <div class="bg-white rounded-xl shadow-card p-5">
-        <h2 class="text-sm font-semibold mb-2">手动安装</h2>
-        <div class="flex gap-2">
-          <input v-model="manualSkillInput" placeholder="owner/repo 或 owner/repo@skill 或 GitHub URL" class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
-          <button @click="installManualSkill" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">安装</button>
+
+        <!-- 子 tab：市场检索 -->
+        <div v-show="skillTab==='market'">
+          <div class="flex gap-4 mb-3 items-center">
+            <label v-for="t in [{k:'modelscope',l:'ModelScope 市场'},{k:'skillssh',l:'skills.sh'},{k:'local',l:'本地预置'}]" :key="t.k" class="flex items-center gap-1.5 text-xs cursor-pointer">
+              <input type="checkbox" v-model="skillSources[t.k]" class="rounded text-brand-500">
+              <span>{{ t.l }}</span>
+            </label>
+          </div>
+          <div class="flex gap-2 mb-3 items-center">
+            <input v-model="skillSearchQ" @keydown.enter="searchSkills" placeholder="关键词，如：react、设计、API..." class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
+            <button @click="searchSkills" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">搜索</button>
+            <span class="text-[11px] text-ink-500">{{ skillSearchHint }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div v-for="s in skillSearchResults" :key="s.source + s.name" class="border border-ink-300 rounded-md p-3 hover:border-brand-500 transition">
+              <div class="flex justify-between items-start mb-1">
+                <div class="font-medium text-sm">{{ s.name }}</div>
+                <span class="px-1.5 py-0.5 text-[10px] bg-ink-100 rounded">{{ s.source }}</span>
+              </div>
+              <div class="text-[11px] text-ink-500 mb-1">{{ s.author ? '作者: ' + s.author + ' | ' : '' }}安装量: {{ s.install_count || 0 }}</div>
+              <div class="text-xs text-ink-700 line-clamp-2 mb-2">{{ s.description }}</div>
+              <div class="flex justify-between items-center gap-2">
+                <code class="text-[10px] text-ink-500 flex-1 truncate">{{ s.install_command }}</code>
+                <button @click="installFromSearch(s)" class="px-2 py-1 text-[11px] bg-brand-50 text-brand-600 rounded hover:bg-brand-100 shrink-0">安装</button>
+              </div>
+            </div>
+            <div v-if="!skillSearchResults.length && skillSearched" class="col-span-2 text-center text-ink-500 py-6 text-xs">无结果</div>
+          </div>
         </div>
-        <p class="text-[11px] text-ink-500 mt-1">支持 vercel-labs/skills、vercel-labs/skills@find-skills、https://github.com/owner/repo</p>
+
+        <!-- 子 tab：手动安装 -->
+        <div v-show="skillTab==='manual'">
+          <div class="flex gap-2">
+            <input v-model="manualSkillInput" placeholder="owner/repo 或 owner/repo@skill 或 GitHub URL" class="flex-1 px-3 py-1.5 text-xs border border-ink-300 rounded-md">
+            <button @click="installManualSkill" class="px-4 py-1.5 text-xs bg-brand-500 text-white rounded-md hover:bg-brand-600">安装</button>
+          </div>
+          <p class="text-[11px] text-ink-500 mt-2">支持 vercel-labs/skills、vercel-labs/skills@find-skills、https://github.com/owner/repo</p>
+        </div>
       </div>
       <div class="bg-white rounded-xl shadow-card p-5">
         <div class="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
-          <h2 class="text-sm font-semibold">已安装技能 ({{ installedSkills.length }})</h2>
-          <button @click="syncToIde" class="px-3 py-1.5 text-xs bg-ink-100 rounded hover:bg-ink-300">同步到 IDE</button>
+          <h2 class="text-sm font-semibold">已安装技能 ({{ installedSkills.length }} · 选中 {{ selectedInstalledCount }})</h2>
+          <div class="flex gap-2">
+            <button @click="toggleAllInstalled(true)" class="px-2 py-1.5 text-[11px] bg-ink-100 rounded hover:bg-ink-300">全选</button>
+            <button @click="toggleAllInstalled(false)" class="px-2 py-1.5 text-[11px] bg-ink-100 rounded hover:bg-ink-300">全不选</button>
+            <button @click="syncInstalledToIde" :disabled="syncing" class="px-3 py-1.5 text-xs bg-brand-500 text-white rounded hover:bg-brand-600 disabled:opacity-50">
+              {{ syncing ? '同步中...' : '同步到 IDE' }}
+            </button>
+          </div>
         </div>
         <div class="grid grid-cols-2 gap-2">
-          <div v-for="s in installedSkills" :key="s.name" class="border border-ink-300 rounded-md p-2.5">
+          <div v-for="s in installedSkills" :key="s.name" :class="['border rounded-md p-2.5 transition', selectedInstalledSkills[s.name] ? 'border-brand-400 bg-brand-50/30' : 'border-ink-300']">
             <div class="flex justify-between items-center">
-              <div class="font-medium text-sm">{{ s.name }}</div>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" v-model="selectedInstalledSkills[s.name]" class="w-4 h-4 accent-brand-500 cursor-pointer">
+                <div class="font-medium text-sm">{{ s.name }}</div>
+              </div>
               <div class="flex gap-1">
                 <button @click="viewSkillMd(s.name)" class="text-[11px] text-brand-600 hover:underline">查看</button>
                 <button @click="uninstallSkill(s.name)" class="text-[11px] text-red-500 hover:underline">卸载</button>
@@ -657,7 +683,7 @@ createApp({
     const pluginForm = reactive({ name: '', version: '1.0.0', description: '', author: 'MyAgentPlugin' });
     const pluginTargetIde = ref('Codex');  // 插件生成配置后同步的目标 IDE
 
-    const mcpTab = ref('market');
+    const mcpTab = ref('market');  // MCP 添加方式子 tab：market / manual
     const mcpMarketQ = ref('');
     const mcpMarketResults = ref([]);
     const mcpSearched = ref(false);
@@ -665,13 +691,15 @@ createApp({
     const editingMcp = ref('');  // 当前正在编辑的 MCP 名（空=未编辑）
     const editMcpForm = reactive({ type:'', command:'', args:'', url:'', headers:'', env:'' });
 
-    const skillSource = ref('modelscope');
+    const skillTab = ref('market');  // Skill 添加方式子 tab：market / manual
+    const skillSources = reactive({ modelscope: true, skillssh: false, local: false });  // 搜索源多选，默认勾选 modelscope
     const skillSearchQ = ref('');
     const skillSearchResults = ref([]);
     const skillSearchHint = ref('');
     const skillSearched = ref(false);
     const manualSkillInput = ref('');
     const installedSkills = ref([]);
+    const selectedInstalledSkills = reactive({});  // 已安装技能勾选状态，key=技能名
 
     const ideList = [
       { key: 'Cursor', label: 'Cursor', desc: '.cursor/rules + .cursor/mcp.json' },
@@ -1084,21 +1112,31 @@ createApp({
     async function searchSkills() {
       const q = skillSearchQ.value.trim();
       if (!q) return;
+      const srcs = Object.keys(skillSources).filter(k => skillSources[k]);
+      if (!srcs.length) { toast('请至少勾选一个搜索源', 'warn'); return; }
       skillSearched.value = true;
       skillSearchHint.value = '搜索中...';
-      if (skillSource.value === 'local') {
-        skillSearchResults.value = localSkills.value.filter(s =>
+      let results = [];
+      // 本地源
+      if (srcs.includes('local')) {
+        const localHits = localSkills.value.filter(s =>
           (s.skill_name || '').toLowerCase().includes(q.toLowerCase()) ||
           (s.description || '').toLowerCase().includes(q.toLowerCase())
         ).map(s => ({ source:'local', name:s.skill_name, description:s.description, author:'', install_count:0, install_command:'npx skills add ' + s.skill_name + ' --copy -y' }));
-        skillSearchHint.value = '';
-        return;
+        results = results.concat(localHits);
       }
-      const r = await api('/api/skills/search?q=' + encodeURIComponent(q) + '&source=' + skillSource.value);
+      // 市场源（modelscope / skillssh，两个都勾选用 all 聚合）
+      const marketSrcs = srcs.filter(s => s !== 'local');
+      if (marketSrcs.length) {
+        const sourceParam = marketSrcs.length === 2 ? 'all' : marketSrcs[0];
+        const r = await api('/api/skills/search?q=' + encodeURIComponent(q) + '&source=' + sourceParam);
+        if (r.ok) {
+          results = results.concat(r.data || []);
+          if (r.errors && r.errors.length) toast('部分源失败: ' + r.errors.join('; '), 'warn');
+        } else { toast('搜索失败', 'err'); }
+      }
+      skillSearchResults.value = results;
       skillSearchHint.value = '';
-      if (!r.ok) { toast('搜索失败', 'err'); return; }
-      if (r.errors && r.errors.length) toast('部分源失败: ' + r.errors.join('; '), 'warn');
-      skillSearchResults.value = r.data || [];
     }
     async function installFromSearch(s) {
       let cmd = s.install_command || '';
@@ -1130,6 +1168,20 @@ createApp({
     }
     async function syncToIde() { await syncIde('All'); }
 
+    // ===== 已安装技能勾选 =====
+    const selectedInstalledCount = computed(() => installedSkills.value.filter(s => selectedInstalledSkills[s.name]).length);
+    function getSelectedInstalledSkills() { return installedSkills.value.filter(s => selectedInstalledSkills[s.name]).map(s => s.name); }
+    function toggleAllInstalled(checked) {
+      installedSkills.value.forEach(s => { selectedInstalledSkills[s.name] = checked; });
+    }
+    // 已安装区"同步到 IDE"按钮：按勾选的技能同步
+    async function syncInstalledToIde() {
+      if (syncing.value) { toast('正在同步中，请稍候', 'warn'); return; }
+      const sel = getSelectedInstalledSkills();
+      if (!sel.length) { toast('请先勾选要同步的技能', 'warn'); return; }
+      await runSync(syncTargetIde.value, ['skill'], sel);
+    }
+
     // ===== IDE =====
     async function syncIde(ide) {
       // 至少勾选一项
@@ -1138,16 +1190,21 @@ createApp({
       await runSync(ide, scopes);
     }
     // 单 scope 同步：用于各配置 tab 顶部的"同步到 IDE"按钮
+    // skill scope 时附带已勾选的技能名，实现按需同步
     async function syncScopeToIde(scope) {
       if (syncing.value) { toast('正在同步中，请稍候', 'warn'); return; }
-      await runSync(syncTargetIde.value, [scope]);
+      const skills = scope === 'skill' ? getSelectedInstalledSkills() : null;
+      if (scope === 'skill' && skills && !skills.length) { toast('请先勾选要同步的技能', 'warn'); return; }
+      await runSync(syncTargetIde.value, [scope], skills);
     }
-    // 通用同步执行
-    async function runSync(ide, scopes) {
+    // 通用同步执行（skills 可选：仅同步勾选的技能）
+    async function runSync(ide, scopes, skills) {
       if (syncing.value) { toast('正在同步中，请稍候', 'warn'); return; }
       syncing.value = true;
       ideLog.value = '';
-      const evt = new EventSource('/api/init-ide?ide=' + encodeURIComponent(ide) + '&scope=' + encodeURIComponent(scopes.join(',')));
+      let url = '/api/init-ide?ide=' + encodeURIComponent(ide) + '&scope=' + encodeURIComponent(scopes.join(','));
+      if (skills && skills.length) url += '&skills=' + encodeURIComponent(skills.join(','));
+      const evt = new EventSource(url);
       evt.onmessage = e => {
         ideLog.value += e.data + '\n';
         if (ideLogEl.value) ideLogEl.value.scrollTop = ideLogEl.value.scrollHeight;
@@ -1203,8 +1260,8 @@ createApp({
       mcpFilterText, mcpTemplate, selectedSkills, selectedMcp,
       plugins, selectedPluginFile, pluginForm,
       mcpTab, mcpMarketQ, mcpMarketResults, mcpSearched, mcpForm, editingMcp, editMcpForm,
-      skillSource, skillSearchQ, skillSearchResults, skillSearchHint, skillSearched,
-      manualSkillInput, installedSkills,
+      skillTab, skillSources, skillSearchQ, skillSearchResults, skillSearchHint, skillSearched,
+      manualSkillInput, installedSkills, selectedInstalledSkills, selectedInstalledCount,
       ideList, ideLog, ideLogEl, syncScopes, syncTargetIde, syncing,
       logVisible, logText, logEl, modalVisible, modalTitle, modalContent, toasts,
       toggleProvider, updateEnvDataSection, addProvider, deleteProvider, setActiveProvider,
@@ -1220,6 +1277,7 @@ createApp({
       startEditMcp, cancelEditMcp, saveEditMcp, mcpEnabledCount,
       searchSkills, installFromSearch, installManualSkill,
       viewSkillMd, uninstallSkill, syncToIde, syncIde, syncScopeToIde,
+      toggleAllInstalled, syncInstalledToIde,
     };
   }
 }).mount('#app');

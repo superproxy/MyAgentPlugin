@@ -278,6 +278,13 @@ def index():
     return send_file(PROJECT_ROOT / "tools" / "config_ui.html")
 
 
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    """提供本地静态资源（Vue / Tailwind JIT 等），避免依赖外部 CDN。"""
+    from flask import send_from_directory
+    return send_from_directory(PROJECT_ROOT / "tools" / "static", filename)
+
+
 # ============================================================
 # Env 配置 API（向后兼容：从 llm.yaml + mcp.yaml 合并读写）
 # ============================================================
@@ -841,7 +848,15 @@ def trigger_init_ide_sse():
     if not scopes:
         scopes = ["llm", "mcp", "skill", "plugin"]
     scope_arg = ",".join(scopes)
-    cmd = _script_run_shell_cmd("init-ide", ["--ide", ide, "--force", "--scope", scope_arg])
+    cmd_args = ["--ide", ide, "--force", "--scope", scope_arg]
+    # 可选：仅同步勾选的技能（逗号分隔的技能名）
+    skills = request.args.get("skills", "").strip()
+    if skills:
+        # 仅保留安全字符（字母、数字、-、_、逗号、空格），防止注入
+        safe_skills = ",".join(s.strip() for s in skills.split(",") if s.strip() and all(c.isalnum() or c in "-_ " for c in s.strip()))
+        if safe_skills:
+            cmd_args += ["--skills", safe_skills]
+    cmd = _script_run_shell_cmd("init-ide", cmd_args)
     return Response(
         stream_with_context(_stream_process(cmd, cwd=PROJECT_ROOT)),
         mimetype="text/event-stream",

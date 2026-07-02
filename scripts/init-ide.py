@@ -153,6 +153,9 @@ def copy_skills_safe(src: Path, dst: Path, label: str, force: bool) -> None:
     for skill_dir in sorted(src.iterdir()):
         if not skill_dir.is_dir():
             continue
+        # 按 --skills 过滤：仅同步白名单内的技能
+        if INCLUDE_SKILLS is not None and skill_dir.name not in INCLUDE_SKILLS:
+            continue
         skill_dst = dst / skill_dir.name
         if skill_dst.exists():
             if force:
@@ -707,6 +710,9 @@ def write_skills_index(skills_source_dir: Path, target_file: Path, ide_name: str
 
     for skill_dir in sorted(skills_source_dir.iterdir()):
         if not skill_dir.is_dir():
+            continue
+        # 按 --skills 过滤：仅索引白名单内的技能
+        if INCLUDE_SKILLS is not None and skill_dir.name not in INCLUDE_SKILLS:
             continue
         skill_file = skill_dir / "SKILL.md"
         if not skill_file.exists():
@@ -1360,11 +1366,24 @@ def main() -> None:
         default="llm,mcp,skill,plugin",
         help="Comma-separated scopes to sync: llm,mcp,skill,plugin,rules (default: all)"
     )
+    parser.add_argument(
+        "--skills",
+        default="",
+        help="Comma-separated skill names to sync (default: all). 用于前端按勾选同步技能。"
+    )
     args = parser.parse_args()
 
     # 解析 scope（全局变量，供各 init_xxx 函数判断）
     global SCOPE
     SCOPE = set(s.strip().lower() for s in args.scope.split(",") if s.strip())
+
+    # 解析 --skills 白名单（全局变量，供 copy_skills_safe / write_skills_index 过滤）
+    global INCLUDE_SKILLS
+    if args.skills.strip():
+        INCLUDE_SKILLS = set(s.strip() for s in args.skills.split(",") if s.strip())
+        print(f"{COLOR_DARKGRAY}[i] Skills filter: {len(INCLUDE_SKILLS)} skill(s) selected{COLOR_RESET}")
+    else:
+        INCLUDE_SKILLS = None
     # 兼容：rules 归入 rules 同步；plugin 单独处理
     if not SCOPE:
         SCOPE = {"llm", "mcp", "skill", "plugin", "rules"}
