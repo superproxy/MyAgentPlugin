@@ -32,13 +32,12 @@ from lib.skills import install_skill
 # ============================================================
 
 def load_plugin_config(plugin_path: Path) -> dict:
-    """加载插件配置文件"""
+    """加载插件配置文件（支持 yaml/json，按扩展名自动识别）"""
     if not plugin_path.exists():
         print(f"{COLOR_RED}[!] 插件文件不存在: {plugin_path}{COLOR_RESET}", file=sys.stderr)
         sys.exit(1)
 
-    with open(plugin_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return load_env_config_file(plugin_path)
 
 
 def validate_plugin_config(config: dict) -> bool:
@@ -78,40 +77,6 @@ def update_env_file(env_path: Path, plugin_config: dict) -> None:
         env_path.parent.mkdir(parents=True, exist_ok=True)
         save_env_config_file(env_path, env_config)
         print(f"{COLOR_GREEN}[OK] 环境变量文件已更新: {env_path}{COLOR_RESET}")
-
-
-def update_mcp_template(mcp_template_path: Path, plugin_config: dict) -> None:
-    """更新 MCP 配置（mcp.yaml，统一存放 mcpServers + mcp 密钥）。
-    mcp_template_path 现指 mcp.yaml；保留 mcp 密钥段，仅合并 mcpServers。"""
-    if "mcpServers" not in plugin_config:
-        return
-
-    if not mcp_template_path.exists():
-        print(f"{COLOR_YELLOW}[!] MCP配置文件不存在，创建新文件: {mcp_template_path}{COLOR_RESET}")
-        mcp_config = {"mcpServers": {}, "mcp": {}}
-    else:
-        mcp_config = load_env_config_file(mcp_template_path)
-        if not isinstance(mcp_config, dict):
-            mcp_config = {}
-
-    # 确保有 mcpServers 字段
-    if "mcpServers" not in mcp_config or not isinstance(mcp_config.get("mcpServers"), dict):
-        mcp_config["mcpServers"] = {}
-
-    # 更新 MCP 服务器配置
-    updated = False
-    for server_name, server_config in plugin_config["mcpServers"].items():
-        if server_name not in mcp_config["mcpServers"]:
-            mcp_config["mcpServers"][server_name] = server_config
-            print(f"{COLOR_GREEN}[+] 添加MCP服务器: {server_name}{COLOR_RESET}")
-            updated = True
-        else:
-            print(f"{COLOR_DARKGRAY}[~] MCP服务器已存在: {server_name}{COLOR_RESET}")
-
-    if updated:
-        mcp_template_path.parent.mkdir(parents=True, exist_ok=True)
-        save_env_config_file(mcp_template_path, mcp_config)
-        print(f"{COLOR_GREEN}[OK] MCP配置已更新: {mcp_template_path}{COLOR_RESET}")
 
 
 # ============================================================
@@ -171,12 +136,16 @@ def install_skills(plugin_config: dict, source_dir: Path, use_symlink: bool = Fa
 def install_plugin(
     plugin_path: Path,
     env_path: Path,
-    mcp_template_path: Path,
     source_dir: Path,
     dry_run: bool = False,
     use_symlink: bool = False
 ) -> None:
-    """安装插件"""
+    """安装插件
+
+    工作流程：执行 install 脚本 → 下载 skill → 合并 envVars 到 llm.yaml
+    plugin.yaml 中的 mcpServers 不在此阶段合并，由 agentctl generate 阶段
+    同时读取 mcp.yaml + plugins/*.plugin.yaml 合并生成 mcp.json。
+    """
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
     print(f"{COLOR_CYAN}  插件安装{COLOR_RESET}")
     print(f"{COLOR_CYAN}{'=' * 40}{COLOR_RESET}")
@@ -196,25 +165,26 @@ def install_plugin(
         print(f"\n{COLOR_YELLOW}[!] 这是模拟运行，不进行实际修改{COLOR_RESET}")
         return
 
-    # 执行安装步骤
-    print(f"\n{COLOR_MAGENTA}步骤 1/4: 更新环境变量{COLOR_RESET}")
-    update_env_file(env_path, plugin_config)
-
-    print(f"\n{COLOR_MAGENTA}步骤 2/4: 更新MCP配置{COLOR_RESET}")
-    update_mcp_template(mcp_template_path, plugin_config)
-
-    print(f"\n{COLOR_MAGENTA}步骤 3/4: 执行插件脚本{COLOR_RESET}")
+    # 工作流程：执行 install 脚本 → 下载 skill → 合并 envVars 到 llm.yaml
+    # plugin.yaml 中的 mcpServers 不再合并到 mcp.yaml，而是由 agentctl generate
+    # 阶段同时读取 mcp.yaml + plugins/*.plugin.yaml 合并生成 mcp.json（保持 mcp.yaml 纯净）
+    # 后续由 agentctl setup/sync 完成「同步到 IDE」与「skill 同步到 IDE」
+    print(f"\n{COLOR_MAGENTA}步骤 1/3: 执行插件 install 脚本{COLOR_RESET}")
     run_plugin_scripts(plugin_config)
 
-    print(f"\n{COLOR_MAGENTA}步骤 4/4: 安装技能{COLOR_RESET}")
+    print(f"\n{COLOR_MAGENTA}步骤 2/3: 下载技能{COLOR_RESET}")
     install_skills(plugin_config, source_dir, use_symlink=use_symlink)
+
+    print(f"\n{COLOR_MAGENTA}步骤 3/3: 合并环境变量到 llm.yaml{COLOR_RESET}")
+    update_env_file(env_path, plugin_config)
 
     print(f"\n{COLOR_GREEN}{'=' * 40}{COLOR_RESET}")
     print(f"{COLOR_GREEN}  插件安装完成！{COLOR_RESET}")
     print(f"{COLOR_GREEN}{'=' * 40}{COLOR_RESET}")
     print(f"\n{COLOR_YELLOW}下一步: {COLOR_RESET}")
-    print(f"  {COLOR_WHITE}1. 运行 agentctl sync 更新运行时配置{COLOR_RESET}")
-    print(f"  {COLOR_WHITE}2. 运行 agentctl ide 同步到IDE{COLOR_RESET}")
+    print(f"  {COLOR_WHITE}1. agentctl generate  # 合并 mcp.yaml + plugin mcp → mcp.json{COLOR_RESET}")
+    print(f"  {COLOR_WHITE}2. agentctl sync      # 同步 mcp + skills 到各 IDE{COLOR_RESET}")
+    print(f"  {COLOR_WHITE}（或直接）agentctl setup  # 一键执行 plugin install all + generate + sync{COLOR_RESET}")
 
 
 def list_plugins(plugins_dir: Path) -> None:
@@ -227,17 +197,17 @@ def list_plugins(plugins_dir: Path) -> None:
         print(f"{COLOR_YELLOW}[!] 插件目录不存在: {plugins_dir}{COLOR_RESET}")
         return
 
-    # 查找插件文件
+    # 查找插件文件（支持 .plugin.yaml / .plugin.json）
     plugin_files = []
-    for file in plugins_dir.iterdir():
-        if file.is_file() and file.suffix == ".json":
-            try:
-                with open(file, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                    if "name" in config and "version" in config:
+    for pattern in ("*.plugin.yaml", "*.plugin.yml", "*.plugin.json"):
+        for file in plugins_dir.glob(pattern):
+            if file.is_file():
+                try:
+                    config = load_env_config_file(file)
+                    if isinstance(config, dict) and "name" in config and "version" in config:
                         plugin_files.append((file, config))
-            except Exception:
-                continue
+                except Exception:
+                    continue
 
     if not plugin_files:
         print(f"{COLOR_YELLOW}[!] 没有找到有效的插件{COLOR_RESET}")
@@ -257,7 +227,7 @@ def list_plugins(plugins_dir: Path) -> None:
 # ============================================================
 
 def load_skills_mapping(csv_path: Path) -> list:
-    """从 skills-mapping.csv 加载技能映射"""
+    """从 skills-index.csv 加载技能映射"""
     skills = []
     if not csv_path.exists():
         print(f"{COLOR_YELLOW}[!] 技能映射文件不存在: {csv_path}{COLOR_RESET}")
@@ -278,7 +248,7 @@ def generate_plugin_from_csv(
     plugin_description: str,
     category_filter: str = None
 ) -> None:
-    """根据 skills-mapping.csv 生成插件配置"""
+    """根据 skills-index.csv 生成插件配置"""
     skills = load_skills_mapping(csv_path)
     if not skills:
         print(f"{COLOR_RED}[!] 没有找到技能数据{COLOR_RESET}")
@@ -316,15 +286,14 @@ def generate_plugin_from_csv(
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(plugin_config, f, indent=2, ensure_ascii=False)
+    save_env_config_file(output_path, plugin_config)
 
     print(f"{COLOR_GREEN}[OK] 插件已生成: {output_path}{COLOR_RESET}")
     print(f"   包含 {len(plugin_skills)} 个技能")
 
 
 def list_skills_from_csv(csv_path: Path) -> None:
-    """从 skills-mapping.csv 列出所有技能"""
+    """从 skills-index.csv 列出所有技能"""
     skills = load_skills_mapping(csv_path)
     if not skills:
         return

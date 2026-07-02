@@ -94,10 +94,52 @@ def invoke_generate_step(
     print()
 
 
-def invoke_mcp_generate_step(flat_config: dict, mcp_yaml_file: Path, output_file: Path) -> None:
-    """从 mcp.yaml 读取 mcpServers，替换占位符后生成 mcp.json。"""
+def collect_plugin_mcp_servers(plugins_dir: Path) -> dict:
+    """扫描 agents/plugins/*.plugin.yaml，合并所有插件的 mcpServers。
+
+    plugin.yaml 中的 mcpServers 与 mcp.yaml 的 mcpServers 在 generate 阶段
+    一起合并到 mcp.json，避免污染 mcp.yaml（保持 mcp.yaml 为用户手写的纯净源）。
+
+    合并规则：
+    - mcp.yaml 的 mcpServers 优先（用户手写覆盖插件默认）
+    - plugin.yaml 的 mcpServers 作为补充（同名校验：若 mcp.yaml 已有则跳过）
+    """
+    if not plugins_dir or not plugins_dir.exists():
+        return {}
+
+    merged = {}
+    for p in sorted(plugins_dir.glob("*.plugin.yaml")):
+        try:
+            cfg = load_env_config_file(p)
+            if not isinstance(cfg, dict):
+                continue
+        except Exception as e:
+            print(f"{COLOR_YELLOW}[!] 跳过无法解析的插件 {p.name}: {e}{COLOR_RESET}")
+            continue
+        servers = cfg.get("mcpServers", {})
+        if not isinstance(servers, dict):
+            continue
+        for name, server_cfg in servers.items():
+            if name in merged:
+                print(f"{COLOR_DARKGRAY}[~] plugin mcp 重复，跳过: {name} (in {p.name}){COLOR_RESET}")
+                continue
+            merged[name] = server_cfg
+            print(f"{COLOR_GREEN}[+] plugin mcp: {name} (from {p.name}){COLOR_RESET}")
+    return merged
+
+
+def invoke_mcp_generate_step(
+    flat_config: dict,
+    mcp_yaml_file: Path,
+    output_file: Path,
+    plugins_dir: Path | None = None,
+) -> None:
+    """从 mcp.yaml + plugins/*.plugin.yaml 合并 mcpServers，替换占位符后生成 mcp.json。
+
+    合并优先级：mcp.yaml（用户手写）> plugin.yaml（插件默认）。
+    """
     print(f"{COLOR_CYAN}========================================{COLOR_RESET}")
-    print(f"{COLOR_CYAN}  Step: Generate mcp.json from mcp.yaml{COLOR_RESET}")
+    print(f"{COLOR_CYAN}  Step: Generate mcp.json from mcp.yaml + plugins{COLOR_RESET}")
     print(f"{COLOR_CYAN}========================================{COLOR_RESET}")
     print()
 
@@ -106,6 +148,8 @@ def invoke_mcp_generate_step(flat_config: dict, mcp_yaml_file: Path, output_file
         sys.exit(1)
 
     print(f"{COLOR_GREEN}Source   : {mcp_yaml_file}{COLOR_RESET}")
+    if plugins_dir and plugins_dir.exists():
+        print(f"{COLOR_GREEN}Plugins  : {plugins_dir}{COLOR_RESET}")
     print(f"{COLOR_GREEN}Output   : {output_file}{COLOR_RESET}")
     print()
 
@@ -116,6 +160,16 @@ def invoke_mcp_generate_step(flat_config: dict, mcp_yaml_file: Path, output_file
         sys.exit(1)
 
     mcp_servers = mcp_data.get("mcpServers", {}) if isinstance(mcp_data, dict) else {}
+
+    # 合并 plugin.yaml 的 mcpServers（mcp.yaml 优先）
+    if plugins_dir:
+        print(f"{COLOR_CYAN}--- Merging plugin mcpServers ---{COLOR_RESET}")
+        plugin_servers = collect_plugin_mcp_servers(plugins_dir)
+        for name, cfg in plugin_servers.items():
+            if name not in mcp_servers:
+                mcp_servers[name] = cfg
+        print()
+
     enabled_servers = {
         name: cfg for name, cfg in mcp_servers.items()
         if not (isinstance(cfg, dict) and (cfg.get("disabled") is True or cfg.get("disabled") == "true"))

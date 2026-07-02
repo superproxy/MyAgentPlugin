@@ -80,22 +80,11 @@ def _load_script_module(module_name: str, file_path: Path):
     return mod
 
 
-# scripts/ 下文件名带连字符，不能用普通 import；用 importlib 加载
-_plugin_manager_file = SCRIPTS_DIR / "plugin-manager.py"
-_init_env_file = SCRIPTS_DIR / "init-env.py"
-
-if not _plugin_manager_file.exists():
-    print(f"[ERROR] 找不到 {_plugin_manager_file}")
-    sys.exit(1)
-
-_pm = _load_script_module("plugin_manager", _plugin_manager_file)
-build_install_command = _pm.build_install_command
-install_plugin = _pm.install_plugin
-load_env_config_file = _pm.load_env_config_file
-parse_shorthand = _pm.parse_shorthand
-save_env_config_file = _pm.save_env_config_file
-update_env_file = _pm.update_env_file
-update_mcp_template = _pm.update_mcp_template
+# 从 lib/ 公共库导入（替代旧脚本的 importlib 加载）
+sys.path.insert(0, str(SCRIPTS_DIR))
+from lib.config_io import load_env_config_file, save_env_config_file
+from lib.skills import build_install_command, parse_shorthand
+from lib.plugins import install_plugin, update_env_file
 
 app = Flask(__name__, static_folder=None)
 
@@ -112,7 +101,7 @@ LLM_EXAMPLE = PROJECT_ROOT / "llm-env-example.yaml"
 MCP_CONFIG_EXAMPLE = PROJECT_ROOT / "mcp-env-example.yaml"
 MCP_TEMPLATE = PROJECT_ROOT / "agents" / "mcp" / "mcp.template.json"
 PLUGINS_DIR = PROJECT_ROOT / "agents" / "plugins"
-SKILLS_CSV = PROJECT_ROOT / "agents" / "plugins" / "skills-mapping.csv"
+SKILLS_CSV = PROJECT_ROOT / "agents" / "skills" / "skills-index.csv"
 AGENTS_SKILLS_CACHE = PROJECT_ROOT / "agents" / "skills"
 DOT_AGENTS_SKILLS = PROJECT_ROOT / ".agents" / "skills"
 
@@ -671,10 +660,14 @@ def mcp_detail():
 def list_plugins():
     plugins = []
     if PLUGINS_DIR.exists():
-        for f in PLUGINS_DIR.glob("*.plugin.json"):
+        # 支持 .plugin.yaml / .plugin.yml / .plugin.json
+        files = []
+        for pat in ("*.plugin.yaml", "*.plugin.yml", "*.plugin.json"):
+            files.extend(PLUGINS_DIR.glob(pat))
+        for f in sorted(files):
             try:
-                cfg = _read_json(f)
-                if "name" in cfg:
+                cfg = load_env_config_file(f)
+                if isinstance(cfg, dict) and "name" in cfg:
                     plugins.append({
                         "file": f.name,
                         "name": cfg.get("name"),
@@ -704,9 +697,9 @@ def save_plugin():
     }
     # 安全文件名
     safe_name = "".join(c for c in name if c.isalnum() or c in ("-", "_"))
-    out_path = PLUGINS_DIR / f"{safe_name}.plugin.json"
+    out_path = PLUGINS_DIR / f"{safe_name}.plugin.yaml"
     try:
-        _write_json(out_path, config)
+        save_env_config_file(out_path, config)
         return jsonify({"ok": True, "path": str(out_path.relative_to(PROJECT_ROOT))})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -714,7 +707,7 @@ def save_plugin():
 
 @app.route("/api/plugin/load", methods=["GET"])
 def load_plugin():
-    """加载完整 plugin.json 内容。Query: file=xxx.plugin.json"""
+    """加载完整 plugin 配置。Query: file=xxx.plugin.yaml"""
     fname = request.args.get("file", "").strip()
     if not fname:
         return jsonify({"ok": False, "error": "缺少 file 参数"}), 400
@@ -726,7 +719,7 @@ def load_plugin():
     if not path.exists():
         return jsonify({"ok": False, "error": "文件不存在"}), 404
     try:
-        data = _read_json(path)
+        data = load_env_config_file(path)
         return jsonify({"ok": True, "data": data, "path": str(path.relative_to(PROJECT_ROOT))})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -734,7 +727,7 @@ def load_plugin():
 
 @app.route("/api/plugin/delete", methods=["POST"])
 def delete_plugin():
-    """删除 plugin.json。Body: {file: xxx.plugin.json}"""
+    """删除 plugin 配置。Body: {file: xxx.plugin.yaml}"""
     body = request.get_json(force=True)
     fname = (body.get("file") or "").strip()
     if not fname:
@@ -755,7 +748,7 @@ def delete_plugin():
 
 @app.route("/api/plugin/install", methods=["GET"])
 def install_plugin_sse():
-    """SSE: 流式安装插件。Query: file=xxx.plugin.json"""
+    """SSE: 流式安装插件。Query: file=xxx.plugin.yaml"""
     fname = request.args.get("file", "").strip()
     if not fname:
         return Response("data: [ERROR] 缺少 file 参数\n\n", mimetype="text/event-stream")
@@ -771,7 +764,7 @@ def install_plugin_sse():
         yield f"data: [PLUGIN] {fname}\n\n"
         yield f"data: [STEP] 加载插件配置\n\n"
         try:
-            cfg = _read_json(plugin_path)
+            cfg = load_env_config_file(plugin_path)
             yield f"data:   名称: {cfg.get('name')}\n\n"
             yield f"data:   版本: {cfg.get('version')}\n\n"
             yield f"data:   技能数: {len(cfg.get('skills', []))}\n\n"
@@ -780,21 +773,22 @@ def install_plugin_sse():
             yield "data: [DONE]\n\n"
             return
 
-        # 复用 install_plugin（capture 部分输出无法流式，这里我们直接调用底层的步骤）
+        # 复用 install_plugin 的底层步骤（capture 部分输出无法流式，这里直接调用）
+        # 注意：plugin.yaml 的 mcpServers 不在此阶段合并，由 agentctl generate
+        # 阶段同时读取 mcp.yaml + plugins/*.plugin.yaml 合并生成 mcp.json
         yield f"data: [STEP] 更新 llm.yaml\n\n"
         try:
             env_path = _ensure_llm_file()
-            # 重定向 stdout 到管道（update_env_file / update_mcp_template 内部有 print）
+            # 重定向 stdout 到管道（update_env_file 内部有 print）
             import contextlib
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 update_env_file(env_path, cfg)
-                update_mcp_template(_ensure_mcp_config_file(), cfg)
             for line in buf.getvalue().splitlines():
                 if line.strip():
                     yield f"data: {line}\n\n"
         except Exception as e:
-            yield f"data: [ERROR] llm/mcp 更新失败: {e}\n\n"
+            yield f"data: [ERROR] llm 更新失败: {e}\n\n"
 
         yield f"data: [STEP] 安装技能\n\n"
         try:
@@ -816,10 +810,10 @@ def install_plugin_sse():
 # ============================================================
 @app.route("/api/init-env", methods=["POST"])
 def trigger_init_env():
-    """触发 init-env.py -a Generate"""
+    """触发 agentctl generate（原 init-env.py -a Generate）"""
     try:
         result = subprocess.run(
-            _script_run_cmd("init-env", ["-a", "Generate"]),
+            _script_run_cmd("agentctl", ["generate"]),
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
@@ -839,7 +833,7 @@ def trigger_init_env():
 
 @app.route("/api/init-ide", methods=["GET"])
 def trigger_init_ide_sse():
-    """SSE: 触发 init-ide.py --ide <ide> --force --scope <scope>"""
+    """SSE: 触发 agentctl sync --ide <ide> --force --scope <scope>"""
     ide = request.args.get("ide", "All")
     scope = request.args.get("scope", "llm,mcp,skill,plugin").strip()
     # 白名单校验，防止注入
@@ -848,7 +842,7 @@ def trigger_init_ide_sse():
     if not scopes:
         scopes = ["llm", "mcp", "skill", "plugin"]
     scope_arg = ",".join(scopes)
-    cmd_args = ["--ide", ide, "--force", "--scope", scope_arg]
+    cmd_args = ["sync", "--ide", ide, "--force", "--scope", scope_arg]
     # 可选：仅同步勾选的技能（逗号分隔的技能名）
     skills = request.args.get("skills", "").strip()
     if skills:
@@ -856,7 +850,7 @@ def trigger_init_ide_sse():
         safe_skills = ",".join(s.strip() for s in skills.split(",") if s.strip() and all(c.isalnum() or c in "-_ " for c in s.strip()))
         if safe_skills:
             cmd_args += ["--skills", safe_skills]
-    cmd = _script_run_shell_cmd("init-ide", cmd_args)
+    cmd = _script_run_shell_cmd("agentctl", cmd_args)
     return Response(
         stream_with_context(_stream_process(cmd, cwd=PROJECT_ROOT)),
         mimetype="text/event-stream",

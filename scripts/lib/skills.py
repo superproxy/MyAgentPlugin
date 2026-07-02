@@ -200,7 +200,7 @@ def write_skills_index(skills_source_dir: Path, target_file: Path, ide_name: str
 
     lines.append(f"{H2}Skill to Role Mapping")
     lines.append("")
-    csv_path = skills_source_dir.parent.parent / "skills-mapping.csv"
+    csv_path = skills_source_dir.parent.parent / "skills-index.csv"
     mapping = load_skill_mapping(csv_path)
     if mapping:
         lines.extend(build_role_mapping_table(mapping))

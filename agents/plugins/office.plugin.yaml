@@ -1,0 +1,35 @@
+name: office
+version: 1.0.0
+description: 常用办公插件
+author: MyAgentPlugin
+scripts:
+  install: npm i -g open-computer-use && npm i -g open-browser-use && open-browser-use setup
+mcpServers:
+  open-computer-use:
+    command: open-computer-use
+    args:
+      - mcp
+skills:
+  - name: find-skills
+    source: vercel-labs/skills
+    skill: find-skills
+    description: 查找技能
+  - name: skill-creator
+    source: anthropics/skills
+    skill: skill-creator
+    description: 创建技能
+  - name: pptx
+    source: anthropics/skills
+    skill: pptx
+    description: PowerPoint 操作
+  - name: open-browser-use
+    source: iFurySt/open-browser-use
+    description: 浏览器自动化操作
+  - name: open-computer-use
+    source: iFurySt/open-codex-computer-use
+    skill: open-computer-use
+    description: 电脑自动化操作
+  - name: screenshot
+    source: openai/skills
+    skill: screenshot
+    description: 截图

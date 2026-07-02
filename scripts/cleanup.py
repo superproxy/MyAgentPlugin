@@ -2,8 +2,8 @@
 import os
 
 files_to_remove = [
-    "agents/plugins/browser-use.plugin.json",
-    "agents/plugins/hybrid-example.plugin.json"
+    "agents/plugins/browser-use.plugin.yaml",
+    "agents/plugins/hybrid-example.plugin.yaml"
 ]
 
 for file_path in files_to_remove:

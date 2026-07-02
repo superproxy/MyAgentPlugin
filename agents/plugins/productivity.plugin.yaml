@@ -1,0 +1,15 @@
+name: productivity
+version: 1.0.0
+description: 生产力插件 - 提供需求分析、任务规划、项目管理能力
+author: MyAgentPlugin
+mcpServers: {}
+skills:
+  - { name: usecase-prd-skill, description: 用例驱动的 PRD 编写 }
+  - { name: task-plan-skill, description: 任务拆解与排期 }
+  - { name: weekly-report-skill, description: 周报/月报生成 }
+  - { name: brainstorming, description: 头脑风暴与需求探索 }
+  - { name: openspec-explore, description: OpenSpec 探索模式 }
+  - { name: openspec-propose, description: OpenSpec 提案 }
+  - { name: openspec-apply-change, description: OpenSpec 实施变更 }
+  - { name: openspec-sync-specs, description: OpenSpec 同步规范 }
+  - { name: bid-to-tender-skill, description: 投标书生成 }

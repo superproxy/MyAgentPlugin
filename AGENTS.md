@@ -55,7 +55,7 @@ agents/
 
 - **模板层**：列出占位符 `${KEY}`，可以安全提交，作为"团队共识结构"。
 - **密钥层**：`llm.yaml` + `mcp.yaml` 由开发者本地填写，**绝不提交**。
-- **运行态产物**：由 [scripts/init-env.py](file:///c:/Users/59300/Desktop/agent-init-plugin/scripts/init-env.py) 在本地组合两者后生成；**绝不提交**。
+- **运行态产物**：由 `agentctl generate`（见 [scripts/agentctl.py](scripts/agentctl.py)）在本地组合两者后生成；**绝不提交**。
 
 这样模板可以演化（新增 provider / MCP 服务）而不需要每次改密钥；密钥可以轮换而不影响共享结构。
 
@@ -100,7 +100,7 @@ agents/
 
 ### 1.5.6 IDE 抽象层级
 
-`scripts/init-ide.py` 把所有 IDE 抽象成相同的初始化步骤：
+`scripts/agentctl.py sync`（由 `scripts/lib/ide/` 分发器实现）把所有 IDE 抽象成相同的初始化步骤：
 
 ```
 [Rules]    源 agents/rules/ → 目标 IDE rules 目录（Junction 优先，复制 fallback）
@@ -111,19 +111,22 @@ agents/
 
 新增一个 IDE 通常只需：
 
-1. 在 `init-ide.py` 加一个 `init_<name>()` 函数
-2. 在 `--ide` 参数列表加上选项
-3. 如果 IDE 有特殊 MCP 格式，加一个 `convert_to_<name>_mcp()`
+1. 在 `scripts/lib/ide/` 加一个 `<name>.py`，继承 `IdeTarget`
+2. 在 `scripts/lib/ide/__init__.py` 的 `IDE_REGISTRY` 注册
+3. 如果 IDE 有特殊 MCP 格式，在分发器中实现 `init_mcp`
 
 **核心约束**：不要为单个 IDE 创建平行的 `agents/` 副本；所有差异都应在生成层处理，而非数据层。
 
 ### 1.5.7 一键脚本的语义
 
-| 脚本 | 含义 | 适用场景 |
+所有入口都收敛到 `agentctl` 子命令：
+
+| 子命令 | 含义 | 适用场景 |
 |------|------|---------|
-| `init-env` | 只刷新密钥相关产物 | 轮换密钥、切换 provider |
-| `install` | 端到端：密钥 + 多 IDE 全量 | 新机器、新成员、大版本升级 |
-| `plugin-manager` | 管理插件安装和技能同步 | 安装新插件、同步技能库 |
+| `agentctl generate` | 只刷新密钥相关产物（mcp.json + 各 IDE 模板） | 轮换密钥、切换 provider |
+| `agentctl sync` | 同步 rules/mcp/skills 到各 IDE | 改完共享源后同步 |
+| `agentctl plugin install` | 安装单个插件（install 脚本 + skill 下载 + 合并 mcp/env） | 安装新插件 |
+| `agentctl setup` | 一键全流程：plugin install all → generate → sync | 新机器、新成员、大版本升级 |
 
 ### 1.5.8 插件系统（Plugin System）
 
@@ -135,38 +138,35 @@ agents/skills/              → 原始源，备份，不直接修改（提交到
   └── {skill-name}/SKILL.md
 .agents/skills/             → 开发环境，可以在这里更新，然后同步到 IDE（不提交）
 agents/plugins/             → 插件配置目录
-  ├── core.plugin.json      → 核心插件（基础技能）
-  ├── frontend-design.plugin.json  → 前端设计插件
-  ├── productivity.plugin.json      → 生产力插件
-  ├── dev-tools.plugin.json         → 开发工具插件
-  └── computer-use.plugin.json      → 电脑操作插件
+  ├── core.plugin.yaml          → 核心插件（基础技能）
+  ├── frontend-design.plugin.yaml  → 前端设计插件
+  ├── productivity.plugin.yaml     → 生产力插件
+  ├── dev-tools.plugin.yaml        → 开发工具插件
+  └── computer-use.plugin.yaml     → 电脑操作插件
 ```
 
 #### 数据流向
-1. **插件安装**：`agents/skills` → `.agents/skills`（从源复制到开发环境）
-2. **IDE 同步**：`.agents/skills` → `各 IDE 的 skills 目录`
-3. **日常开发**：在 `.agents/skills` 更新，然后运行 `init-ide.py` 同步到 IDE
+1. **插件安装**（`agentctl plugin install`）：执行 install 脚本 → 下载 skill 到 `agents/skills/` → 合并 envVars 到 `llm.yaml`
+   - 注：plugin.yaml 的 `mcpServers` 不在此阶段合并，保持 `mcp.yaml` 为用户手写的纯净源
+2. **配置生成**（`agentctl generate`）：同时读取 `mcp.yaml` + `agents/plugins/*.plugin.yaml` 的 `mcpServers`，合并生成 `mcp.json` + 各 IDE 模板
+   - 合并优先级：`mcp.yaml`（用户手写）> `plugin.yaml`（插件默认）
+3. **IDE 同步**（`agentctl sync`）：同步 `mcp.json` 到各 IDE + 同步 skills 到各 IDE
 
 #### 插件配置格式
 插件配置支持两种 skill 格式，默认都是远程安装，优先检查本地缓存：
 
-```json
-{
-  "name": "plugin-name",
-  "version": "1.0.0",
-  "description": "描述",
-  "mcpServers": {},
-  "skills": [
-    "skill-name",
-    {
-      "name": "skill-name",
-      "source": "owner/repo",
-      "skill": "skill-name",
-      "url": "第三方市场URL（可选）",
-      "description": "描述"
-    }
-  ]
-}
+```yaml
+name: plugin-name
+version: 1.0.0
+description: 描述
+mcpServers: {}
+skills:
+  - skill-name
+  - name: skill-name
+    source: owner/repo
+    skill: skill-name
+    url: 第三方市场URL（可选）
+    description: 描述
 ```
 
 支持三种安装格式：
@@ -179,6 +179,8 @@ agents/plugins/             → 插件配置目录
 2. 检查 `agents/skills/` 缓存，存在则复制到 `.agents/skills/`
 3. 缓存不存在时从远程安装
 
+> 注：插件安装阶段不合并 `mcpServers` 到 `mcp.yaml`。`mcp.yaml` + `plugin.yaml` 的 `mcpServers` 在 `agentctl generate` 阶段一起合并到 `mcp.json`，保持 `mcp.yaml` 为用户手写的纯净源。
+
 #### 目录优先级
 ```
 agents/skills/              → 源/备份（提交到 Git）
@@ -189,23 +191,23 @@ agents/skills/              → 源/备份（提交到 Git）
 #### 使用方式
 ```bash
 # 列出可用插件
-python scripts/plugin-manager.py list
+python scripts/agentctl.py plugin list
 
 # 安装单个插件
-python scripts/plugin-manager.py install agents/plugins/frontend-design.plugin.json
+python scripts/agentctl.py plugin install agents/plugins/frontend-design.plugin.yaml
 
 # 完整安装（含 core 和 computer-use 插件）
 install.cmd  # Windows
 ./install.sh  # Linux/Mac
 
 # 日常：在 .agents/skills 更新后同步到 IDE
-python scripts/init-ide.py --ide All --force
+python scripts/agentctl.py sync --ide All --force
 ```
 
 #### 设计理念
 - **优先本地**：内置技能全部用 `local` 类型，避免网络问题
 - **开发更新**：`.agents/skills` 作为开发环境，可以更新和调试
-- **IDE 同步**：通过 `init-ide.py` 将最新技能同步到各 IDE
+- **IDE 同步**：通过 `agentctl sync` 将最新技能同步到各 IDE
 
 ---
 

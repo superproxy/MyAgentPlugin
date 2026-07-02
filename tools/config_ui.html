@@ -927,7 +927,7 @@ createApp({
     function previewPlugin() {
       const cfg = buildPluginConfig();
       if (!cfg.name) { toast('name 必填', 'warn'); return; }
-      showModal('plugin.json 预览', JSON.stringify(cfg, null, 2));
+      showModal('plugin.yaml 预览', JSON.stringify(cfg, null, 2));
     }
     async function savePluginFile() {
       const cfg = buildPluginConfig();
@@ -942,7 +942,7 @@ createApp({
       const sr = await api('/api/plugin/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg) });
       if (!sr.ok) { toast('保存失败', 'err'); return; }
       const safe = cfg.name.replace(/[^a-zA-Z0-9_-]/g, '');
-      await runSse('/api/plugin/install?file=' + encodeURIComponent(safe + '.plugin.json'), loadInstalledSkills);
+      await runSse('/api/plugin/install?file=' + encodeURIComponent(safe + '.plugin.yaml'), loadInstalledSkills);
     }
     async function installPredefinedPlugin(file) {
       // 一键安装预定义插件：直接调用 /api/plugin/install

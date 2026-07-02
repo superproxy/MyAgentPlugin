@@ -24,7 +24,7 @@ python tools/config_server.py --port 8080 --no-open
 | **LLM 配置** | 可视化编辑 `llm.yaml`（LLM providers / proxy / embedding / tts / asr / vision / misc） |
 | **MCP** | 单页三区：市场搜索 / 已配置（含手动添加） / 密钥配置（`mcp.yaml`） |
 | **Skills 配置** | ModelScope 市场 + skills.sh + 本地预置 + 手动 `owner/repo`，一键 `npx skills add` |
-| **插件组装** | 预定义插件卡片 + 从技能目录/MCP 目录勾选组装 `plugin.json` 并安装 |
+| **插件组装** | 预定义插件卡片 + 从技能目录/MCP 目录勾选组装 `plugin.yaml` 并安装 |
 | **IDE 同步** | 触发 `init-ide.py` 同步配置到各 IDE |
 
 ## 设计要点

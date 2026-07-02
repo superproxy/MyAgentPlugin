@@ -17,7 +17,7 @@
   python scripts/agentctl.py generate
   python scripts/agentctl.py sync --ide Cursor --force
   python scripts/agentctl.py sync --ide All --skills tdd,mermaid
-  python scripts/agentctl.py plugin install agents/plugins/core.plugin.json
+  python scripts/agentctl.py plugin install agents/plugins/core.plugin.yaml
   python scripts/agentctl.py plugin list
   python scripts/agentctl.py provider openai
   python scripts/agentctl.py setup
@@ -74,10 +74,11 @@ def cmd_generate(args):
     print(f"  {COLOR_GREEN}Active LLM: {active_provider}/{'|'.join(active_protocols)}{COLOR_RESET}")
     print()
 
-    # 1. 生成 mcp.json（从 mcp.yaml）
+    # 1. 生成 mcp.json（从 mcp.yaml + plugins/*.plugin.yaml 合并 mcpServers）
     mcp_yaml_file = PROJECT_ROOT / "mcp.yaml"
     mcp_output = PROJECT_ROOT / "agents" / "mcp" / "mcp.json"
-    mcp.invoke_mcp_generate_step(flat_config, mcp_yaml_file, mcp_output)
+    plugins_dir = PROJECT_ROOT / "agents" / "plugins"
+    mcp.invoke_mcp_generate_step(flat_config, mcp_yaml_file, mcp_output, plugins_dir=plugins_dir)
 
     # 2. 生成 opencode.json（从模板 + 注入模型）
     opencode_template = PROJECT_ROOT / "ide" / "opencode" / "opencode.template.json"
@@ -195,9 +196,8 @@ def cmd_plugin_install(args):
     """安装插件。"""
     plugin_path = Path(args.plugin_file).resolve()
     env_path = PROJECT_ROOT / args.env_file
-    mcp_template_path = PROJECT_ROOT / args.mcp_template
     plugins.install_plugin(
-        plugin_path, env_path, mcp_template_path, PROJECT_ROOT,
+        plugin_path, env_path, PROJECT_ROOT,
         dry_run=args.dry_run, use_symlink=args.symlink
     )
 
@@ -209,13 +209,13 @@ def cmd_plugin_list(args):
 
 
 def cmd_skill_list(args):
-    """从 skills-mapping.csv 列出所有技能。"""
+    """从 skills-index.csv 列出所有技能。"""
     csv_path = PROJECT_ROOT / args.csv
     plugins.list_skills_from_csv(csv_path)
 
 
 def cmd_skill_gen_plugin(args):
-    """根据 skills-mapping.csv 生成插件配置。"""
+    """根据 skills-index.csv 生成插件配置。"""
     csv_path = PROJECT_ROOT / args.csv
     output_path = PROJECT_ROOT / args.output
     plugins.generate_plugin_from_csv(
@@ -225,28 +225,42 @@ def cmd_skill_gen_plugin(args):
 
 
 def cmd_setup(args):
-    """一键全流程：generate → plugin install all → sync。"""
+    """一键全流程：plugin install all → generate → sync。
+
+    顺序说明（对应 plugin 工作流程）：
+      1. plugin install all
+         - 执行各插件的 install 脚本
+         - 下载 skill 到 agents/skills/
+         - 合并 envVars 到 llm.yaml
+         （plugin.yaml 的 mcpServers 不在此阶段合并，保持 mcp.yaml 纯净）
+      2. generate
+         - 同时读取 mcp.yaml + agents/plugins/*.plugin.yaml 的 mcpServers，合并生成 mcp.json
+         - 生成各 IDE 模板配置（opencode/codex/claude）
+      3. sync All
+         - 同步 mcp.json 到各 IDE（mcp 同步）
+         - 同步 skills 到各 IDE（skill 同步）
+    """
     header("Setup: Full Pipeline")
 
-    # Step 1: 生成运行态配置
-    print(f"\n{COLOR_CYAN}==> Step 1/3: Generate runtime configs{COLOR_RESET}")
-    ns_gen = argparse.Namespace(provider=None, protocol=None)
-    cmd_generate(ns_gen)
-
-    # Step 2: 安装所有插件
-    print(f"\n{COLOR_CYAN}==> Step 2/3: Install all plugins{COLOR_RESET}")
+    # Step 1: 安装所有插件（执行 install 脚本 → 下载 skill → 合并 envVars）
+    print(f"\n{COLOR_CYAN}==> Step 1/3: Install all plugins{COLOR_RESET}")
     plugins_dir = PROJECT_ROOT / "agents" / "plugins"
     if plugins_dir.exists():
-        for p in sorted(plugins_dir.glob("*.plugin.json")):
+        for p in sorted(plugins_dir.glob("*.plugin.yaml")):
             print(f"\n{COLOR_CYAN}--- Installing: {p.name} ---{COLOR_RESET}")
             plugins.install_plugin(
-                p, PROJECT_ROOT / "llm.yaml", PROJECT_ROOT / "mcp.yaml",
-                PROJECT_ROOT, dry_run=False, use_symlink=False
+                p, PROJECT_ROOT / "llm.yaml", PROJECT_ROOT,
+                dry_run=False, use_symlink=False
             )
     else:
         warn(f"Plugins dir not found: {plugins_dir}")
 
-    # Step 3: 同步到所有 IDE
+    # Step 2: 生成运行态配置（基于合并后的 llm.yaml + mcp.yaml）
+    print(f"\n{COLOR_CYAN}==> Step 2/3: Generate runtime configs{COLOR_RESET}")
+    ns_gen = argparse.Namespace(provider=None, protocol=None)
+    cmd_generate(ns_gen)
+
+    # Step 3: 同步到所有 IDE（mcp 同步 + skill 同步）
     print(f"\n{COLOR_CYAN}==> Step 3/3: Sync to all IDEs{COLOR_RESET}")
     ns_sync = argparse.Namespace(
         ide="All", force=True, scope="llm,mcp,skill,plugin,rules", skills=""
@@ -313,9 +327,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_plugin_sub = p_plugin.add_subparsers(dest="sub", required=True)
 
     p_ins = p_plugin_sub.add_parser("install", help="安装插件")
-    p_ins.add_argument("plugin_file", help="插件 .plugin.json 文件路径")
+    p_ins.add_argument("plugin_file", help="插件 .plugin.yaml 文件路径")
     p_ins.add_argument("--env-file", default="llm.yaml", help="环境变量文件（默认 llm.yaml）")
-    p_ins.add_argument("--mcp-template", default="mcp.yaml", help="MCP 配置文件（默认 mcp.yaml）")
     p_ins.add_argument("--dry-run", action="store_true", help="模拟运行")
     p_ins.add_argument("--symlink", action="store_true",
                        help="使用 symlink 安装 skill（默认 --copy）")
@@ -327,18 +340,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_lst.set_defaults(func=cmd_plugin_list)
 
     # skill
-    p_skill = sub.add_parser("skill", help="技能管理（基于 skills-mapping.csv）")
+    p_skill = sub.add_parser("skill", help="技能管理（基于 skills-index.csv）")
     p_skill_sub = p_skill.add_subparsers(dest="sub", required=True)
 
     p_sl = p_skill_sub.add_parser("list", help="列出 CSV 中所有技能")
-    p_sl.add_argument("--csv", default="doc/skills-mapping.csv",
-                      help="技能映射文件（默认 doc/skills-mapping.csv）")
+    p_sl.add_argument("--csv", default="agents/skills/skills-index.csv",
+                      help="技能映射文件（默认 agents/skills/skills-index.csv）")
     p_sl.set_defaults(func=cmd_skill_list)
 
     p_sg = p_skill_sub.add_parser("gen-plugin", help="根据 CSV 生成插件配置")
-    p_sg.add_argument("--csv", default="doc/skills-mapping.csv",
-                      help="技能映射文件（默认 doc/skills-mapping.csv）")
-    p_sg.add_argument("--output", default="agents/plugins/generated.plugin.json",
+    p_sg.add_argument("--csv", default="agents/skills/skills-index.csv",
+                      help="技能映射文件（默认 agents/skills/skills-index.csv）")
+    p_sg.add_argument("--output", default="agents/plugins/generated.plugin.yaml",
                       help="输出文件路径")
     p_sg.add_argument("--name", default="generated", help="插件名称")
     p_sg.add_argument("--description", default="", help="插件描述")
